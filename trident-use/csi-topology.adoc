@@ -1,0 +1,305 @@
+---
+sidebar: sidebar 
+permalink: trident-use/csi-topology.html 
+keywords: volumes, csi topology, storage classes, backends, kubernetes 
+summary: Trident puede crear y adjuntar volúmenes de forma selectiva a los nodos presentes en un clúster de Kubernetes usando la función de topología CSI. 
+---
+= Usa la topología CSI
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Trident puede crear y adjuntar volúmenes de forma selectiva a los nodos presentes en un clúster de Kubernetes mediante el uso de https://kubernetes-csi.github.io/docs/topology.html["Función de topología CSI"^].
+
+
+
+[[overview]]
+== Descripción general
+
+Con la función CSI Topology, el acceso a los volúmenes se puede limitar a un subconjunto de nodos, según las regiones y zonas de disponibilidad. Hoy en día, los proveedores de nube permiten a los administradores de Kubernetes crear nodos que están basados en zonas. Los nodos pueden estar ubicados en diferentes zonas de disponibilidad dentro de una región o en varias regiones. Para facilitar el aprovisionamiento de volúmenes para cargas de trabajo en una arquitectura multizona, Trident utiliza CSI Topology.
+
+
+TIP: Conoce más sobre la función CSI Topology https://kubernetes.io/blog/2018/10/11/topology-aware-volume-provisioning-in-kubernetes/["aquí"^].
+
+Kubernetes ofrece dos modos de enlace de volumen únicos:
+
+* Con  `VolumeBindingMode` configurado en  `Immediate`, Trident crea el volumen sin ninguna conciencia de topología. La vinculación de volúmenes y el aprovisionamiento dinámico se gestionan cuando se crea la PVC. Esta es la opción predeterminada  `VolumeBindingMode` y es adecuada para clústeres que no aplican restricciones de topología. Los volúmenes persistentes se crean sin tener ninguna dependencia de los requisitos de programación del pod solicitante.
+* Con  `VolumeBindingMode` establecido en  `WaitForFirstConsumer`, la creación y vinculación de un volumen persistente para una PVC se retrasa hasta que se programa y crea un pod que usa la PVC. De esta forma, se crean volúmenes para cumplir con las restricciones de programación impuestas por los requisitos de topología.
+
+
+
+NOTE: El  `WaitForFirstConsumer`modo de enlace no requiere etiquetas de topología. Esto puede usarse independientemente de la función de topología CSI.
+
+.Lo que necesitas
+Para utilizar la topología CSI, necesitas lo siguiente:
+
+* Un clúster de Kubernetes ejecutando un link:../trident-get-started/requirements.html["versión de Kubernetes compatible"]
++
+[listing]
+----
+kubectl version
+Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.3", GitCommit:"1e11e4a2108024935ecfcb2912226cedeafd99df", GitTreeState:"clean", BuildDate:"2020-10-14T12:50:19Z", GoVersion:"go1.15.2", Compiler:"gc", Platform:"linux/amd64"}
+Server Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.3", GitCommit:"1e11e4a2108024935ecfcb2912226cedeafd99df", GitTreeState:"clean", BuildDate:"2020-10-14T12:41:49Z", GoVersion:"go1.15.2", Compiler:"gc", Platform:"linux/amd64"}
+----
+* Los nodos del clúster deben tener etiquetas que permitan reconocer la topología (`topology.kubernetes.io/region` y  `topology.kubernetes.io/zone`). Estas etiquetas *deberían estar presentes en los nodos del clúster* antes de instalar Trident para que Trident reconozca la topología.
++
+[listing]
+----
+kubectl get nodes -o=jsonpath='{range .items[*]}[{.metadata.name}, {.metadata.labels}]{"\n"}{end}' | grep --color "topology.kubernetes.io"
+[node1, {"beta.kubernetes.io/arch":"amd64","beta.kubernetes.io/os":"linux","kubernetes.io/arch":"amd64","kubernetes.io/hostname":"node1","kubernetes.io/os":"linux","node-role.kubernetes.io/master":"","topology.kubernetes.io/region":"us-east1","topology.kubernetes.io/zone":"us-east1-a"}]
+[node2, {"beta.kubernetes.io/arch":"amd64","beta.kubernetes.io/os":"linux","kubernetes.io/arch":"amd64","kubernetes.io/hostname":"node2","kubernetes.io/os":"linux","node-role.kubernetes.io/worker":"","topology.kubernetes.io/region":"us-east1","topology.kubernetes.io/zone":"us-east1-b"}]
+[node3, {"beta.kubernetes.io/arch":"amd64","beta.kubernetes.io/os":"linux","kubernetes.io/arch":"amd64","kubernetes.io/hostname":"node3","kubernetes.io/os":"linux","node-role.kubernetes.io/worker":"","topology.kubernetes.io/region":"us-east1","topology.kubernetes.io/zone":"us-east1-c"}]
+----
+
+
+
+
+[[step-1-create-a-topology-aware-backend]]
+== Paso 1: crea un backend que tenga en cuenta la topología
+
+Los backends de almacenamiento Trident pueden diseñarse para aprovisionar volúmenes selectivamente según las zonas de disponibilidad. Cada backend puede incluir un  `supportedTopologies` bloque opcional que representa una lista de zonas y regiones compatibles. Para StorageClasses que hacen uso de dicho backend, solo se creará un volumen si lo solicita una aplicación programada en una región o zona compatible.
+
+Aquí tienes un ejemplo de definición de backend:
+
+[role="tabbed-block"]
+====
+.YAML
+--
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+backendName: san-backend-us-east1
+managementLIF: 192.168.27.5
+svm: iscsi_svm
+username: admin
+password: password
+supportedTopologies:
+  - topology.kubernetes.io/region: us-east1
+    topology.kubernetes.io/zone: us-east1-a
+  - topology.kubernetes.io/region: us-east1
+    topology.kubernetes.io/zone: us-east1-b
+----
+--
+.JSON
+--
+[source, json]
+----
+{
+  "version": 1,
+  "storageDriverName": "ontap-san",
+  "backendName": "san-backend-us-east1",
+  "managementLIF": "192.168.27.5",
+  "svm": "iscsi_svm",
+  "username": "admin",
+  "password": "password",
+  "supportedTopologies": [
+    {
+      "topology.kubernetes.io/region": "us-east1",
+      "topology.kubernetes.io/zone": "us-east1-a"
+    },
+    {
+      "topology.kubernetes.io/region": "us-east1",
+      "topology.kubernetes.io/zone": "us-east1-b"
+    }
+  ]
+}
+----
+--
+====
+
+NOTE: `supportedTopologies` se utiliza para proporcionar una lista de regiones y zonas por backend. Estas regiones y zonas representan la lista de valores permitidos que se pueden proporcionar en un StorageClass. Para StorageClasses que contienen un subconjunto de las regiones y zonas proporcionadas en un backend, Trident crea un volumen en el backend.
+
+Puedes definir `supportedTopologies` por grupo de almacenamiento también. Mira el siguiente ejemplo:
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-nas
+backendName: nas-backend-us-central1
+managementLIF: 172.16.238.5
+svm: nfs_svm
+username: admin
+password: password
+supportedTopologies:
+  - topology.kubernetes.io/region: us-central1
+    topology.kubernetes.io/zone: us-central1-a
+  - topology.kubernetes.io/region: us-central1
+    topology.kubernetes.io/zone: us-central1-b
+storage:
+  - labels:
+      workload: production
+    supportedTopologies:
+      - topology.kubernetes.io/region: us-central1
+        topology.kubernetes.io/zone: us-central1-a
+  - labels:
+      workload: dev
+    supportedTopologies:
+      - topology.kubernetes.io/region: us-central1
+        topology.kubernetes.io/zone: us-central1-b
+
+----
+En este ejemplo, las  `region` y  `zone` etiquetas representan la ubicación del grupo de almacenamiento.  `topology.kubernetes.io/region` y  `topology.kubernetes.io/zone` indican desde dónde se pueden consumir los grupos de almacenamiento.
+
+
+
+[[step-2-define-storageclasses-that-are-topology-aware]]
+== Paso 2: Define StorageClasses que son conscientes de la topología
+
+Según las etiquetas de topología que se proporcionan a los nodos en el clúster, se pueden definir StorageClasses para que contengan información de topología. Esto determinará los grupos de almacenamiento que sirven como candidatos para las solicitudes de PVC realizadas y el subconjunto de nodos que pueden usar los volúmenes proporcionados por Trident.
+
+Mira el siguiente ejemplo:
+
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: netapp-san-us-east1
+provisioner: csi.trident.netapp.io
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+  - matchLabelExpressions:
+    - key: topology.kubernetes.io/zone
+      values:
+        - us-east1-a
+        - us-east1-b
+    - key: topology.kubernetes.io/region
+      values:
+        - us-east1
+parameters:
+  fsType: ext4
+----
+En la definición de StorageClass proporcionada arriba, `volumeBindingMode` se establece en  `WaitForFirstConsumer`. Las PVC que se soliciten con este StorageClass no se procesarán hasta que se haga referencia a ellas en un pod. Y, `allowedTopologies` proporciona las zonas y la región que se van a usar. El `netapp-san-us-east1` StorageClass crea PVC en el backend definido arriba `san-backend-us-east1`.
+
+
+
+[[step-3-create-and-use-a-pvc]]
+== Paso 3: crea y utiliza un PVC
+
+Con el StorageClass creado y asignado a un backend, ahora puedes crear PVCs.
+
+Mira el ejemplo  `spec` abajo:
+
+[source, yaml]
+----
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata: null
+name: pvc-san
+spec: null
+accessModes:
+  - ReadWriteOnce
+resources:
+  requests:
+    storage: 300Mi
+storageClassName: netapp-san-us-east1
+----
+Crear un PVC usando este manifiesto daría como resultado lo siguiente:
+
+[listing]
+----
+kubectl create -f pvc.yaml
+persistentvolumeclaim/pvc-san created
+kubectl get pvc
+NAME      STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS          AGE
+pvc-san   Pending                                      netapp-san-us-east1   2s
+kubectl describe pvc
+Name:          pvc-san
+Namespace:     default
+StorageClass:  netapp-san-us-east1
+Status:        Pending
+Volume:
+Labels:        <none>
+Annotations:   <none>
+Finalizers:    [kubernetes.io/pvc-protection]
+Capacity:
+Access Modes:
+VolumeMode:    Filesystem
+Mounted By:    <none>
+Events:
+  Type    Reason                Age   From                         Message
+  ----    ------                ----  ----                         -------
+  Normal  WaitForFirstConsumer  6s    persistentvolume-controller  waiting for first consumer to be created before binding
+----
+Para que Trident cree un volumen y lo vincule al PVC, usa el PVC en un pod. Mira el siguiente ejemplo:
+
+[source, yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod-1
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: topology.kubernetes.io/region
+            operator: In
+            values:
+            - us-east1
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: In
+            values:
+            - us-east1-a
+            - us-east1-b
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 3000
+    fsGroup: 2000
+  volumes:
+  - name: vol1
+    persistentVolumeClaim:
+      claimName: pvc-san
+  containers:
+  - name: sec-ctx-demo
+    image: busybox
+    command: [ "sh", "-c", "sleep 1h" ]
+    volumeMounts:
+    - name: vol1
+      mountPath: /data/demo
+    securityContext:
+      allowPrivilegeEscalation: false
+----
+Este podSpec le indica a Kubernetes que programe el pod en los nodos que están presentes en la  `us-east1` región y que elija entre cualquier nodo que esté presente en las  `us-east1-a` o  `us-east1-b` zonas.
+
+Mira el siguiente resultado:
+
+[listing]
+----
+kubectl get pods -o wide
+NAME        READY   STATUS    RESTARTS   AGE   IP               NODE              NOMINATED NODE   READINESS GATES
+app-pod-1   1/1     Running   0          19s   192.168.25.131   node2             <none>           <none>
+kubectl get pvc -o wide
+NAME      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS          AGE   VOLUMEMODE
+pvc-san   Bound    pvc-ecb1e1a0-840c-463b-8b65-b3d033e2e62b   300Mi      RWO            netapp-san-us-east1   48s   Filesystem
+----
+
+
+[[update-backends-to-include-supportedtopologies]]
+== Actualizar los backends para incluir `supportedTopologies`
+
+Los backends preexistentes se pueden actualizar para incluir una lista de  `supportedTopologies` usando  `tridentctl backend update`. Esto no afectará a los volúmenes que ya se hayan aprovisionado y solo se usará para PVC posteriores.
+
+
+
+[[find-more-information]]
+== Encuentra más información
+
+* https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/["Administra recursos para contenedores"^]
+* https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector["nodeSelector"^]
+* https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity["Afinidad y antiafinidad"^]
+* https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/["Taints y tolerations"^]
+

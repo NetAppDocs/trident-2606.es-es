@@ -1,0 +1,116 @@
+---
+section: trident-use
+title: Usa Trident
+entries:
+- title: Prepara el nodo trabajador
+  url: "/trident-use/worker-node-prep.html"
+- title: Configura y gestiona backends
+  entries:
+  - title: Descripción general
+    url: "/trident-use/backends.html"
+  - title: Azure NetApp Files
+    entries:
+    - title: Descripción general
+      url: "/trident-use/anf.html"
+    - title: Prepárate para configurar
+      url: "/trident-use/anf-prep.html"
+    - title: Opciones de configuración y ejemplos
+      url: "/trident-use/anf-examples.html"
+  - title: Google Cloud NetApp Volumes
+    entries:
+    - title: Descripción general
+      url: "/trident-use/gcnv.html"
+    - title: Configura el almacenamiento en bloque
+      url: "/trident-use/gcnv-block.html"
+    - title: Prepárate para configurar
+      url: "/trident-use/gcnv-prep.html"
+    - title: Opciones de configuración y ejemplos
+      url: "/trident-use/gcnv-examples.html"
+    - title: Configura la jerarquización automática
+      url: "/trident-use/gcnv-auto-tiering.html"
+    - title: Configura grupos de almacenamiento en modo ONTAP
+      url: "/trident-use/gcnv-ontap-mode.html"
+  - title: NetApp HCI o SolidFire
+    url: "/trident-use/element.html"
+  - title: Controladores SAN de ONTAP
+    entries:
+    - title: Descripción general
+      url: "/trident-use/ontap-san.html"
+    - title: Prepárate para configurar
+      url: "/trident-use/ontap-san-prep.html"
+    - title: Opciones de configuración y ejemplos
+      url: "/trident-use/ontap-san-examples.html"
+  - title: Controladores NAS de ONTAP
+    entries:
+    - title: Descripción general
+      url: "/trident-use/ontap-nas.html"
+    - title: Prepárate para configurar
+      url: "/trident-use/ontap-nas-prep.html"
+    - title: Opciones de configuración y ejemplos
+      url: "/trident-use/ontap-nas-examples.html"
+  - title: Utiliza la distribución equilibrada con los backends de ONTAP
+    url: "/trident-use/ontap-balanced-placement.html"
+  - title: Amazon FSx for NetApp ONTAP
+    entries:
+    - title: Descripción general
+      url: "/trident-use/trident-fsx.html"
+    - title: Crea un rol IAM y un secreto de AWS
+      url: "/trident-use/trident-fsx-iam-role.html"
+    - title: Instala Trident
+      url: "/trident-use/trident-fsx-install-trident.html"
+    - title: Configura la clase de almacenamiento
+      url: "/trident-use/trident-fsx-storageclass-pvc.html"
+    - title: Configura un PVC
+      url: "/trident-use/trident-fsx-create-pvc.html"
+    - title: Poner en marcha una aplicación de muestra
+      url: "/trident-use/trident-fsx-deploy-sample.html"
+    - title: Configura el complemento Trident EKS en un clúster EKS
+      url: "/trident-use/trident-aws-addon.html"
+  - title: Crea backends con kubectl
+    url: "/trident-use/backend-kubectl.html"
+  - title: Gestiona backends
+    entries:
+    - title: Administra backends con kubectl
+      url: "/trident-use/backend_ops_kubectl.html"
+    - title: Administra backends con tridentctl
+      url: "/trident-use/backend_ops_tridentctl.html"
+    - title: Moverte entre las opciones de gestión del backend
+      url: "/trident-use/backend_options.html"
+- title: Crea y gestiona clases de almacenamiento
+  entries:
+  - title: Crear una clase de almacenamiento
+    url: "/trident-use/create-stor-class.html"
+  - title: Administra clases de almacenamiento
+    url: "/trident-use/manage-stor-class.html"
+- title: Aprovisiona y gestiona volúmenes
+  entries:
+  - title: Aprovisiona un volumen
+    url: "/trident-use/vol-provision.html"
+  - title: Mover volúmenes
+    url: "/trident-use/vol-move.html"
+  - title: Ampliar volúmenes
+    url: "/trident-use/vol-expansion.html"
+  - title: Entiende los límites del subsistema RWX NVMe
+    url: "/trident-use/trident-nvme-rwx-subsystem-limits.html"
+  - title: Escalabilidad del controlador
+    url: "/trident-use/controller-scalability.html"
+  - title: Ampliación automática de volúmenes
+    url: "/trident-use/automatic-volume-expansion.html"
+  - title: Gestiona la ampliación automática de volúmenes
+    url: "/trident-use/manage-autogrow-policies.html"
+  - title: Importar volúmenes
+    url: "/trident-use/vol-import.html"
+  - title: Personaliza los nombres de los volúmenes
+    url: "/trident-use/vol-custom-name.html"
+  - title: Comparte volúmenes NFS entre espacios de nombres
+    url: "/trident-use/volume-share.html"
+  - title: Clonar volúmenes en distintos espacios de nombres
+    url: "/trident-use/vol-clone-cross-namespace.html"
+  - title: Replica volúmenes usando SnapMirror
+    url: "/trident-use/vol-volume-replicate.html"
+  - title: Usa la topología CSI
+    url: "/trident-use/csi-topology.html"
+  - title: Usa instantáneas
+    url: "/trident-use/vol-snapshots.html"
+  - title: Crear instantáneas de grupo de volúmenes
+    url: "/trident-use/vol-group-snapshots.html"

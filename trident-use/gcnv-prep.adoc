@@ -1,0 +1,33 @@
+---
+sidebar: sidebar 
+permalink: trident-use/gcnv-prep.html 
+keywords: trident backend, google cloud netapp volumes, smb volumes, active directory, csi proxy, aks, cloud identity 
+summary: Antes de que puedas configurar tu backend de Google Cloud NetApp Volumes, necesitas asegurarte de que se cumplan los siguientes requisitos. 
+---
+= Prepárate para configurar un backend de Google Cloud NetApp Volumes
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Antes de que puedas configurar tu backend de Google Cloud NetApp Volumes, necesitas asegurarte de que se cumplan los siguientes requisitos.
+
+
+
+[[prerequisites-for-nfs-or-smb-volumes]]
+== Requisitos previos para volúmenes NFS o SMB
+
+Si estás usando Google Cloud NetApp Volumes por primera vez o en una ubicación nueva, necesitas hacer una configuración inicial para configurar Google Cloud NetApp Volumes y crear un volumen NFS o SMB. Consulta link:https://cloud.google.com/netapp/volumes/docs/before-you-begin/application-resilience["Antes de empezar"^].
+
+Asegúrate de tener lo siguiente antes de configurar el backend de Google Cloud NetApp Volumes:
+
+* Una cuenta de Google Cloud configurada con el servicio Google Cloud NetApp Volumes. Consulta link:https://cloud.google.com/netapp-volumes["Google Cloud NetApp Volumes"^].
+* Número de proyecto de tu cuenta de Google Cloud. Consulta link:https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects["Identificación de proyectos"^].
+* Una cuenta de servicio de Google Cloud con el rol de NetApp Volumes Admin (`roles/netapp.admin`. Consulta link:https://cloud.google.com/netapp/volumes/docs/get-started/configure-access/iam#roles_and_permissions["Roles y permisos de Identity and Access Management"^].
+* Archivo de clave API para tu cuenta GCNV. Consulta link:https://cloud.google.com/iam/docs/keys-create-delete#creating["Crear una clave de cuenta de servicio"^]
+* Un grupo de almacenamiento. Consulta link:https://cloud.google.com/netapp/volumes/docs/configure-and-use/storage-pools/overview["Descripción general de los storage pools"^].
+
+
+Para obtener más información sobre cómo configurar el acceso a Google Cloud NetApp Volumes, consulta link:https://cloud.google.com/netapp/volumes/docs/get-started/configure-access/workflow#before_you_begin["Configura el acceso a Google Cloud NetApp Volumes"^].

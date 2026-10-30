@@ -1,0 +1,152 @@
+---
+sidebar: sidebar 
+permalink: trident-protect/trident-protect-installation.html 
+keywords: install, trident, protect, requirements, registry 
+summary: Si tu entorno cumple los requisitos, puedes seguir estos pasos para instalar Trident Protect. 
+---
+= Instala y configura Trident Protect
+:hardbreaks:
+:allow-uri-read: 
+:nofooter: 
+:icons: font
+:linkattrs: 
+:imagesdir: ../media/
+
+
+[role="lead"]
+Si tu entorno cumple los requisitos para Trident Protect, puedes seguir estos pasos para instalar Trident Protect en tu clúster. Puedes obtener Trident Protect de NetApp o instalarlo desde tu propio registro privado. Instalarlo desde un registro privado es útil si tu clúster no puede acceder a Internet.
+
+
+
+[[install-trident-protect]]
+== Instala Trident Protect
+
+[role="tabbed-block"]
+====
+.Instala Trident Protect de NetApp
+--
+.Pasos
+. Agrega el repositorio Trident Helm:
++
+[source, console]
+----
+helm repo add netapp-trident-protect https://netapp.github.io/trident-protect-helm-chart
+----
+. Usa Helm para instalar Trident Protect. Reemplaza `<name-of-cluster>` por un nombre de clúster, que se asignará al clúster y se usará para identificar los backups y las snapshots del clúster:
++
+[source, console]
+----
+helm install trident-protect netapp-trident-protect/trident-protect --set clusterName=<name-of-cluster> --version 100.2606.0 --create-namespace --namespace trident-protect
+----
+. Opcionalmente, para activar el registro de depuración (recomendado para la solución de problemas), usa:
++
+[source, console]
+----
+helm install trident-protect netapp-trident-protect/trident-protect --set clusterName=<name-of-cluster> --set logLevel=debug --version 100.2606.0 --create-namespace --namespace trident-protect
+----
++
+El registro de depuración ayuda a soporte de NetApp a solucionar problemas sin requerir cambios en el nivel de registro ni la reproducción del problema.
+
+
+
+--
+.Instala Trident Protect desde un registro privado
+--
+Puedes instalar Trident Protect desde un registro de imágenes privado si tu clúster de Kubernetes no puede acceder a Internet. En estos ejemplos, reemplaza los valores entre corchetes por información de tu entorno:
+
+.Pasos
+. Descarga las siguientes imágenes en tu máquina local, actualiza las etiquetas y luego súbelas a tu registro privado:
++
+[source, console]
+----
+docker.io/netapp/controller:26.06.0
+docker.io/netapp/restic:26.06.0
+docker.io/netapp/kopia:26.06.0
+docker.io/netapp/kopiablockrestore:26.06.0
+docker.io/netapp/trident-autosupport:26.06.0
+docker.io/netapp/exechook:26.06.0
+docker.io/netapp/resourcebackup:26.06.0
+docker.io/netapp/resourcerestore:26.06.0
+docker.io/netapp/resourcedelete:26.06.0
+docker.io/netapp/trident-protect-utils:v1.0.0
+----
++
+Por ejemplo:
+
++
+[source, console]
+----
+docker pull docker.io/netapp/controller:26.06.0
+----
++
+[source, console]
+----
+docker tag docker.io/netapp/controller:26.06.0 <private-registry-url>/controller:26.06.0
+----
++
+[source, console]
+----
+docker push <private-registry-url>/controller:26.06.0
+----
++
+
+NOTE: Para obtener el gráfico Helm, primero descarga el gráfico Helm en una máquina con acceso a internet usando  `helm pull trident-protect --version 100.2606.0 --repo https://netapp.github.io/trident-protect-helm-chart`, luego copia el archivo  `trident-protect-100.2606.0.tgz` resultante a tu entorno sin conexión e instala usando  `helm install trident-protect ./trident-protect-100.2606.0.tgz` en vez de la referencia del repositorio en el paso final.
+
+. Crea el espacio de nombres del sistema Trident Protect:
++
+[source, console]
+----
+kubectl create ns trident-protect
+----
+. Inicia sesión en el registro:
++
+[source, console]
+----
+helm registry login <private-registry-url> -u <account-id> -p <api-token>
+----
+. Crea un pull secret para usarlo en la autenticación del registro privado:
++
+[source, console]
+----
+kubectl create secret docker-registry regcred --docker-username=<registry-username> --docker-password=<api-token> -n trident-protect --docker-server=<private-registry-url>
+----
+. Agrega el repositorio Trident Helm:
++
+[source, console]
+----
+helm repo add netapp-trident-protect https://netapp.github.io/trident-protect-helm-chart
+----
+. Crea un archivo llamado `protectValues.yaml`. Asegúrate de que contiene la siguiente configuración de Trident Protect:
++
+[source, yaml]
+----
+---
+imageRegistry: <private-registry-url>
+imagePullSecrets:
+  - name: regcred
+----
++
+
+NOTE: Los valores `imageRegistry` y `imagePullSecrets` se aplican a todas las imágenes de componentes, incluyendo `resourcebackup` y `resourcerestore`. Si envías imágenes a una ruta de repositorio específica dentro de tu registro (por ejemplo, `example.com:443/my-repo`), incluye la ruta completa en el campo de registro. Esto asegurará que todas las imágenes se extraigan de `<private-registry-url>/<image-name>:<tag>`.
+
+. Usa Helm para instalar Trident Protect. Reemplaza `<name_of_cluster>` por un nombre de clúster, que se asignará al clúster y se usará para identificar los backups y las snapshots del clúster:
++
+[source, console]
+----
+helm install trident-protect netapp-trident-protect/trident-protect --set clusterName=<name_of_cluster> --version 100.2606.0 --create-namespace --namespace trident-protect -f protectValues.yaml
+----
+. Opcionalmente, para activar el registro de depuración (recomendado para la solución de problemas), usa:
++
+[source, console]
+----
+helm install trident-protect netapp-trident-protect/trident-protect --set clusterName=<name-of-cluster> --set logLevel=debug --version 100.2606.0 --create-namespace --namespace trident-protect -f protectValues.yaml
+----
++
+El registro de depuración ayuda a soporte de NetApp a solucionar problemas sin requerir cambios en el nivel de registro ni la reproducción del problema.
+
+
+
+--
+====
+
+NOTE: Para más opciones de configuración del gráfico de Helm, incluidos los ajustes de AutoSupport y el filtrado de espacios de nombres, consulta link:trident-protect-customize-installation.html#configure-additional-trident-protect-helm-chart-settings["Personaliza la instalación de Trident Protect"].

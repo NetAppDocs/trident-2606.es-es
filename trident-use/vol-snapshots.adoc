@@ -1,0 +1,413 @@
+---
+sidebar: sidebar 
+permalink: trident-use/vol-snapshots.html 
+keywords: volumes, on-demand volume snapshots, create snapshots, backends, kubernetes, create PVCs, PVCs, snapshot, volume snapshot, import snapshot, recover data 
+summary: 'Las instantáneas de volúmenes de Kubernetes de Persistent Volumes (PVs) permiten copias en un momento específico de los volúmenes. Puedes crear una instantánea de un volumen creado usando Trident, importar una instantánea creada fuera de Trident, crear un nuevo volumen a partir de una instantánea existente y recuperar datos de volúmenes desde instantáneas.' 
+---
+= Trabajar con instantáneas de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Las instantáneas de volúmenes de Kubernetes de Persistent Volumes (PVs) permiten copias en un momento específico de los volúmenes. Puedes crear una instantánea de un volumen creado usando Trident, importar una instantánea creada fuera de Trident, crear un nuevo volumen a partir de una instantánea existente y recuperar datos de volúmenes desde instantáneas.
+
+
+
+[[overview]]
+== Descripción general
+
+La instantánea de volumen es compatible con  `ontap-nas`, `ontap-nas-flexgroup`, `ontap-san`, `ontap-san-economy`, `solidfire-san`, `azure-netapp-files` y  `google-cloud-netapp-volumes` controladores.
+
+.Antes de empezar
+Debes tener un controlador de instantáneas externo y definiciones de recursos personalizadas (CRDs) para trabajar con instantáneas. Esto es responsabilidad del orquestador de Kubernetes (por ejemplo: Kubeadm, GKE, OpenShift).
+
+Si tu distribución de Kubernetes no incluye el controlador de instantáneas y los CRD, consulta <<Implementa un controlador de instantáneas de volumen>>.
+
+
+NOTE: No crees un controlador de instantáneas si vas a crear instantáneas de volumen bajo demanda en un entorno GKE. GKE usa un controlador de instantáneas integrado y oculto.
+
+
+
+[[create-a-volume-snapshot]]
+== Crear una instantánea de volumen
+
+.Pasos
+. Crea un `VolumeSnapshotClass`. Para más información, consulta link:../trident-reference/objects.html#kubernetes-volumesnapshotclass-objects["VolumeSnapshotClass"].
++
+** El `driver` apunta al controlador Trident CSI.
+** `deletionPolicy` puede ser `Delete` o `Retain`. Cuando se establece en `Retain`, la instantánea física subyacente en el clúster de almacenamiento se conserva incluso cuando el objeto `VolumeSnapshot` se elimina.
++
+.Ejemplo
+[listing]
+----
+cat snap-sc.yaml
+----
++
+[source, yaml]
+----
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: csi-snapclass
+driver: csi.trident.netapp.io
+deletionPolicy: Delete
+----
+
+
+. Crea una instantánea de un PVC existente.
++
+.Ejemplos
+** Este ejemplo crea una instantánea de un PVC existente.
++
+[listing]
+----
+cat snap.yaml
+----
++
+[source, yaml]
+----
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: pvc1-snap
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: pvc1
+----
+** Este ejemplo crea un objeto de instantánea de volumen para un PVC llamado `pvc1` y el nombre de la instantánea se establece en `pvc1-snap`. Un VolumeSnapshot es análogo a un PVC y está asociado con un `VolumeSnapshotContent` objeto que representa la instantánea real.
++
+[listing]
+----
+kubectl create -f snap.yaml
+volumesnapshot.snapshot.storage.k8s.io/pvc1-snap created
+
+kubectl get volumesnapshots
+NAME                   AGE
+pvc1-snap              50s
+----
+** Puedes identificar el objeto `VolumeSnapshotContent` para el `pvc1-snap` VolumeSnapshot describiéndolo. El `Snapshot Content Name` identifica el objeto VolumeSnapshotContent que sirve a esta instantánea. El parámetro `Ready To Use` indica que la instantánea puede usarse para crear un nuevo PVC.
++
+[listing]
+----
+kubectl describe volumesnapshots pvc1-snap
+Name:         pvc1-snap
+Namespace:    default
+...
+Spec:
+  Snapshot Class Name:    pvc1-snap
+  Snapshot Content Name:  snapcontent-e8d8a0ca-9826-11e9-9807-525400f3f660
+  Source:
+    API Group:
+    Kind:       PersistentVolumeClaim
+    Name:       pvc1
+Status:
+  Creation Time:  2019-06-26T15:27:29Z
+  Ready To Use:   true
+  Restore Size:   3Gi
+...
+----
+
+
+
+
+
+
+[[create-a-pvc-from-a-volume-snapshot]]
+== Crear una PVC a partir de una instantánea de volumen
+
+Puedes usar `dataSource` para crear un PVC usando un VolumeSnapshot llamado `<pvc-name>` como fuente de los datos. Después de crear el PVC, puedes adjuntarlo a un pod y usarlo como cualquier otro PVC.
+
+
+WARNING: El PVC se creará en el mismo backend que el volumen de origen. Consulta link:https://kb.netapp.com/Cloud/Astra/Trident/Creating_a_PVC_from_a_Trident_PVC_Snapshot_cannot_be_created_in_an_alternate_backend["KB: no se puede crear un PVC a partir de una instantánea de PVC de Trident en un backend alternativo"^].
+
+El siguiente ejemplo crea el PVC usando `pvc1-snap` como fuente de datos.
+
+[listing]
+----
+cat pvc-from-snap.yaml
+----
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-from-snap
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: golden
+  resources:
+    requests:
+      storage: 3Gi
+  dataSource:
+    name: pvc1-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+----
+
+
+[[import-a-volume-snapshot]]
+== Importar una instantánea de volumen
+
+Trident admite la link:https://kubernetes.io/docs/concepts/storage/volume-snapshots/#static["Proceso de instantáneas preaprovisionadas de Kubernetes"^] para que el administrador del clúster pueda crear un `VolumeSnapshotContent` objeto e importar instantáneas creadas fuera de Trident.
+
+.Antes de empezar
+Trident debe haber creado o importado el volumen primario de la instantánea.
+
+.Pasos
+. *Administrador del clúster:* Crea un `VolumeSnapshotContent` objeto que hace referencia a la instantánea del backend. Esto inicia el flujo de trabajo de la instantánea en Trident.
++
+** Especifica el nombre de la instantánea del backend en  `annotations` como  `trident.netapp.io/internalSnapshotName: <"backend-snapshot-name">`.
+** Especifica  `<name-of-parent-volume-in-trident>/<volume-snapshot-content-name>` en  `snapshotHandle`. Esta es la única información proporcionada a Trident por el snapshotter externo en la llamada  `ListSnapshots`.
++
+
+NOTE: El `<volumeSnapshotContentName>` no siempre puede coincidir con el nombre de la instantánea de backend debido a las restricciones de nomenclatura de CR.
+
++
+.Ejemplo
+El siguiente ejemplo crea un `VolumeSnapshotContent` objeto que hace referencia a la instantánea del backend `snap-01`.
+
++
+[source, yaml]
+----
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: import-snap-content
+  annotations:
+    trident.netapp.io/internalSnapshotName: "snap-01"  # This is the name of the snapshot on the backend
+spec:
+  deletionPolicy: Retain
+  driver: csi.trident.netapp.io
+  source:
+    snapshotHandle: pvc-f71223b5-23b9-4235-bbfe-e269ac7b84b0/import-snap-content # <import PV name or source PV name>/<volume-snapshot-content-name>
+  volumeSnapshotRef:
+    name: import-snap
+    namespace: default
+----
+
+
+. *Cluster admin:* Crea el `VolumeSnapshot` CR que hace referencia al `VolumeSnapshotContent` objeto. Esto solicita acceso para usar el `VolumeSnapshot` en un espacio de nombres determinado.
++
+.Ejemplo
+El siguiente ejemplo crea un `VolumeSnapshot` CR llamado `import-snap` que hace referencia al `VolumeSnapshotContent` llamado `import-snap-content`.
+
++
+[source, yaml]
+----
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: import-snap
+spec:
+  # volumeSnapshotClassName: csi-snapclass (not required for pre-provisioned or imported snapshots)
+  source:
+    volumeSnapshotContentName: import-snap-content
+----
+. *Procesamiento interno (no requiere acción):* el snapshotter externo reconoce el recién creado `VolumeSnapshotContent` y ejecuta la llamada `ListSnapshots`. Trident crea el `TridentSnapshot`.
++
+** El external snapshotter establece el  `VolumeSnapshotContent` en  `readyToUse` y el  `VolumeSnapshot` en  `true`.
+** Trident devuelve  `readyToUse=true`.
+
+
+. *Cualquier usuario:* Crea un  `PersistentVolumeClaim` para hacer referencia al nuevo  `VolumeSnapshot`, donde el  `spec.dataSource` (o  `spec.dataSourceRef`) nombre es el nombre de  `VolumeSnapshot`.
++
+.Ejemplo
+El siguiente ejemplo crea una PVC que hace referencia al  `VolumeSnapshot` llamado  `import-snap`.
+
++
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-from-snap
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: simple-sc
+  resources:
+    requests:
+      storage: 1Gi
+  dataSource:
+    name: import-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+----
+
+
+
+
+[[recover-volume-data-using-snapshots]]
+== Recupera datos de volumen usando instantáneas
+
+El directorio de instantáneas está oculto de forma predeterminada para facilitar la máxima compatibilidad de los volúmenes aprovisionados usando los  `ontap-nas` y  `ontap-nas-economy` controladores. Habilita el directorio  `.snapshot` para recuperar datos directamente de las instantáneas.
+
+Usa la CLI de ONTAP para restaurar una instantánea de volumen y devolver un volumen a un estado registrado en una instantánea anterior.
+
+[listing]
+----
+cluster1::*> volume snapshot restore -vserver vs0 -volume vol3 -snapshot vol3_snap_archive
+----
+
+NOTE: Cuando restauras una copia instantánea, la configuración existente del volumen se sobrescribe. Los cambios realizados en los datos del volumen después de que se creó la copia instantánea se pierden.
+
+
+
+[[in-place-volume-restoration-from-a-snapshot]]
+== Restauración de volumen en el lugar desde una instantánea
+
+Trident permite la restauración rápida e in situ de volúmenes a partir de una instantánea mediante la  `TridentActionSnapshotRestore` (TASR) CR. Esta CR funciona como una acción imperativa de Kubernetes y no persiste después de que la operación se completa.
+
+Trident admite la restauración de instantáneas en los  `ontap-san`, `ontap-san-economy`, `ontap-nas`, `ontap-nas-flexgroup`, `azure-netapp-files`, `google-cloud-netapp-volumes` y  `solidfire-san` controladores.
+
+.Antes de empezar
+Debes tener un PVC enlazado y una instantánea de volumen disponible.
+
+* Verifica que el estado del PVC esté enlazado.
++
+[source, console]
+----
+kubectl get pvc
+----
+* Verifica que la instantánea de volumen esté lista para usar.
++
+[source, console]
+----
+kubectl get vs
+----
+
+
+.Pasos
+. Crea la CR de TASR. Este ejemplo crea una CR para PVC `pvc1` y volumen snapshot `pvc1-snapshot`.
++
+
+NOTE: El TASR CR debe estar en un espacio de nombres donde existan el PVC y el VS.
+
++
+[source, console]
+----
+cat tasr-pvc1-snapshot.yaml
+----
++
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentActionSnapshotRestore
+metadata:
+  name: trident-snap
+  namespace: trident
+spec:
+  pvcName: pvc1
+  volumeSnapshotName: pvc1-snapshot
+----
+. Aplica la CR para restaurar desde la instantánea. Este ejemplo restaura desde la instantánea `pvc1`.
++
+[source, console]
+----
+kubectl create -f tasr-pvc1-snapshot.yaml
+----
++
+[listing]
+----
+tridentactionsnapshotrestore.trident.netapp.io/trident-snap created
+----
+
+
+.Resultados
+Trident restaura los datos de la instantánea. Puedes verificar el estado de la restauración de la instantánea:
+
+[source, console]
+----
+kubectl get tasr -o yaml
+----
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+items:
+- apiVersion: trident.netapp.io/v1
+  kind: TridentActionSnapshotRestore
+  metadata:
+    creationTimestamp: "2023-04-14T00:20:33Z"
+    generation: 3
+    name: trident-snap
+    namespace: trident
+    resourceVersion: "3453847"
+    uid: <uid>
+  spec:
+    pvcName: pvc1
+    volumeSnapshotName: pvc1-snapshot
+  status:
+    startTime: "2023-04-14T00:20:34Z"
+    completionTime: "2023-04-14T00:20:37Z"
+    state: Succeeded
+kind: List
+metadata:
+  resourceVersion: ""
+----
+[NOTE]
+====
+* En la mayoría de los casos, Trident no reintentará automáticamente la operación en caso de fallo. Tendrás que realizar la operación de nuevo.
+* Es posible que los usuarios de Kubernetes sin acceso de administrador tengan que recibir permiso del administrador para crear un TASR CR en el espacio de nombres de su aplicación.
+
+
+====
+
+
+[[delete-a-pv-with-associated-snapshots]]
+== Eliminar un PV con instantáneas asociadas
+
+Al eliminar un volumen persistente con instantáneas asociadas, el volumen Trident correspondiente se actualiza a un "estado Eliminando". Elimina las instantáneas del volumen para eliminar el volumen Trident.
+
+
+
+[[deploy-a-volume-snapshot-controller]]
+== Implementa un controlador de instantáneas de volumen
+
+Si tu distribución de Kubernetes no incluye el snapshot controller y los CRDs, puedes implementarlos así.
+
+.Pasos
+. Crea CRD de instantáneas de volumen.
++
+[listing]
+----
+cat snapshot-setup.sh
+----
++
+[source, sh]
+----
+#!/bin/bash
+# Create volume snapshot CRDs
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/release-6.1/client/config/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/release-6.1/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/release-6.1/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+----
+. Crea el controlador de instantáneas.
++
+[source, console]
+----
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/release-6.1/deploy/kubernetes/snapshot-controller/rbac-snapshot-controller.yaml
+----
++
+[source, console]
+----
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/release-6.1/deploy/kubernetes/snapshot-controller/setup-snapshot-controller.yaml
+----
++
+
+NOTE: Si es necesario, abre  `deploy/kubernetes/snapshot-controller/rbac-snapshot-controller.yaml` y actualiza  `namespace` a tu espacio de nombres.
+
+
+
+
+
+[[related-links]]
+== Enlaces relacionados
+
+* link:../trident-concepts/snapshots.html["Instantáneas de volumen"]
+* link:../trident-reference/objects.html["VolumeSnapshotClass"]
+

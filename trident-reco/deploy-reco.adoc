@@ -1,0 +1,33 @@
+---
+sidebar: sidebar 
+permalink: trident-reco/deploy-reco.html 
+keywords: deployment, deploy, trident, namespace 
+summary: Usa las recomendaciones que se indican aquí cuando despliegues Trident. 
+---
+= Recomendaciones para el despliegue de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Usa las recomendaciones que se indican aquí cuando despliegues Trident.
+
+
+
+[[deploy-to-a-dedicated-namespace]]
+== Implementa en un espacio de nombres dedicado
+
+https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/["Espacios de nombres"^] proporcionan separación administrativa entre diferentes aplicaciones y son una barrera para compartir recursos. Por ejemplo, una PVC de un espacio de nombres no puede consumirse desde otro. Trident proporciona recursos de PV a todos los espacios de nombres en el clúster de Kubernetes y, en consecuencia, aprovecha una cuenta de servicio que tiene privilegios elevados.
+
+Además, el acceso al pod Trident podría permitir que un usuario acceda a las credenciales del sistema de almacenamiento y a otra información sensible. Es importante asegurarse de que los usuarios de las aplicaciones y las aplicaciones de gestión no tengan la capacidad de acceder a las definiciones de objetos Trident o a los propios pods.
+
+
+
+[[use-quotas-and-range-limits-to-control-storage-consumption]]
+== Usa cuotas y límites de rango para controlar el consumo de almacenamiento
+
+Kubernetes cuenta con dos funciones que, cuando se combinan, proporcionan un potente mecanismo para limitar el consumo de recursos por parte de las aplicaciones. El https://kubernetes.io/docs/concepts/policy/resource-quotas/#storage-resource-quota["mecanismo de cuota de almacenamiento"^] permite al administrador implementar límites de consumo de capacidad y recuento de objetos globales y específicos de la clase de almacenamiento por espacio de nombres. Además, usar un https://kubernetes.io/docs/tasks/administer-cluster/limit-storage-consumption/#limitrange-to-limit-requests-for-storage["límite de rango"^] garantiza que las solicitudes de PVC estén dentro de un valor mínimo y máximo antes de que la solicitud se reenvíe al provisionador.
+
+Estos valores se definen por espacio de nombres, lo que significa que cada espacio de nombres debe tener valores definidos que se ajusten a sus necesidades de recursos. Mira aquí para obtener información sobre https://netapp.io/2017/06/09/self-provisioning-storage-kubernetes-without-worry["cómo aprovechar las cuotas"^].

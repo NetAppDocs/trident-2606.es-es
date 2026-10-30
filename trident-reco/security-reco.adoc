@@ -1,0 +1,76 @@
+---
+sidebar: sidebar 
+permalink: trident-reco/security-reco.html 
+keywords: security, chap, trident, namespace, nve, nae, encryption, volume encryption, aggregate encryption 
+summary: Usa las recomendaciones que se enumeran aquí para asegurarte de que tu instalación de Trident sea segura. 
+---
+= Recomendaciones de seguridad de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Usa las recomendaciones que se enumeran aquí para asegurarte de que tu instalación de Trident sea segura.
+
+
+
+[[run-trident-in-its-own-namespace]]
+== Ejecuta Trident en su propio espacio de nombres
+
+Es importante evitar que las aplicaciones, los administradores de aplicaciones, los usuarios y las aplicaciones de administración accedan a las definiciones de objetos de Trident o a los pods para garantizar un almacenamiento confiable y bloquear posibles actividades maliciosas.
+
+Para separar las demás aplicaciones y usuarios de Trident, siempre instala Trident en su propio espacio de nombres de Kubernetes (`trident`). Poner Trident en su propio espacio de nombres asegura que solo el personal administrativo de Kubernetes tenga acceso al pod de Trident y a los artefactos (como los secretos de backend y CHAP, si aplica) almacenados en los objetos CRD con espacio de nombres. Debes asegurarte de permitir que solo los administradores tengan acceso al espacio de nombres de Trident y así acceso a la  `tridentctl` aplicación.
+
+
+
+[[use-chap-authentication-with-ontap-san-backends]]
+== Usa la autenticación CHAP con backends SAN de ONTAP
+
+Trident admite la autenticación basada en CHAP para cargas de trabajo ONTAP SAN (usando los  `ontap-san` y  `ontap-san-economy` controladores). NetApp recomienda usar CHAP bidireccional con Trident para la autenticación entre un host y el backend de almacenamiento.
+
+Para los backends de ONTAP que usan los controladores de almacenamiento SAN, Trident puede configurar CHAP bidireccional y administrar los nombres de usuario y secretos de CHAP a través de  `tridentctl`. Consulta link:../trident-use/ontap-san-prep.html["Prepárate para configurar el backend con controladores SAN de ONTAP"^] para entender cómo Trident configura CHAP en los backends de ONTAP.
+
+
+
+[[use-chap-authentication-with-netapp-hci-and-solidfire-backends]]
+== Usa la autenticación CHAP con NetApp HCI y SolidFire backends
+
+NetApp recomienda implementar CHAP bidireccional para garantizar la autenticación entre un host y los backends NetApp HCI y SolidFire. Trident utiliza un objeto secreto que incluye dos contraseñas CHAP por inquilino. Cuando se instala Trident, administra los secretos CHAP y los almacena en un objeto CR  `tridentvolume` para el PV correspondiente. Cuando creas un PV, Trident utiliza los secretos CHAP para iniciar una sesión iSCSI y comunicarse con el sistema NetApp HCI y SolidFire mediante CHAP.
+
+
+NOTE: Los volúmenes que crea Trident no están asociados con ningún Volume Access Group.
+
+
+
+[[use-trident-with-nve-and-nae]]
+== Usa Trident con NVE y NAE
+
+NetApp ONTAP proporciona cifrado de datos en reposo para proteger la información confidencial en caso de que un disco sea robado, devuelto o reutilizado. Para obtener más información, consulta link:https://docs.netapp.com/us-en/ontap/encryption-at-rest/configure-netapp-volume-encryption-concept.html["Descripción general de la configuración de NetApp Volume Encryption"^].
+
+* Si NAE está habilitado en el backend, cualquier volumen aprovisionado en Trident tendrá NAE habilitado.
++
+** Puedes configurar el indicador de cifrado NVE en  `""` para crear volúmenes habilitados para NAE.
+
+
+* Si NAE no está habilitado en el backend, cualquier volumen aprovisionado en Trident tendrá NVE habilitado a menos que el indicador de cifrado NVE esté configurado en  `false` (el valor predeterminado) en la configuración del backend.
+
+
+[NOTE]
+====
+Los volúmenes creados en Trident en un backend habilitado para NAE deben ser cifrados con NVE o NAE.
+
+* Puedes configurar el indicador de cifrado NVE a `true` en la configuración del backend de Trident para anular el cifrado NAE y usar una clave de cifrado específica por volumen.
+* Al configurar el indicador de cifrado NVE en  `false` un backend con NAE habilitado, se crea un volumen con NAE habilitado. No puedes deshabilitar el cifrado NAE configurando el indicador de cifrado NVE en  `false`.
+
+
+====
+* Puedes crear manualmente un volumen NVE en Trident configurando explícitamente el indicador de cifrado NVE en  `true`.
+
+
+Para obtener más información sobre las opciones de configuración del backend, consulta:
+
+* link:../trident-use/ontap-san-examples.html["Opciones de configuración de ONTAP SAN"]
+* link:../trident-use/ontap-nas-examples.html["Opciones de configuración de ONTAP NAS"]
+

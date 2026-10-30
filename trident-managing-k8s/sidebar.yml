@@ -1,0 +1,22 @@
+---
+section: trident-managing-k8s
+title: Administra y supervisa Trident
+entries:
+- title: Actualizar Trident
+  entries:
+  - title: Descripción general de la actualización
+    url: "/trident-managing-k8s/upgrade-trident.html"
+  - title: Actualiza con el operador
+    entries:
+    - title: Entiende el flujo de trabajo de actualización del operador
+      url: "/trident-managing-k8s/upgrade-operator-overview.html"
+    - title: Actualiza con el operador
+      url: "/trident-managing-k8s/upgrade-operator.html"
+  - title: Actualiza con tridentctl
+    url: "/trident-managing-k8s/upgrade-tridentctl.html"
+- title: Administra Trident usando tridentctl
+  url: "/trident-managing-k8s/tridentctl.html"
+- title: Monitorea Trident
+  url: "/trident-use/monitor-trident.html"
+- title: Desinstala Trident
+  url: "/trident-managing-k8s/uninstall-trident.html"

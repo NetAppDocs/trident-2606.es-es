@@ -1,0 +1,743 @@
+---
+sidebar: sidebar 
+permalink: trident-use/ontap-san-examples.html 
+keywords: map backends, storage classes, trident backend, ontap san, ontap san economy, options, storageclasses, fsx, metrocluster, ad, active directory 
+summary: Conoce cómo crear y usar controladores ONTAP SAN con tu instalación de Trident. Esta sección ofrece ejemplos de configuración de backends y detalles sobre cómo asignar backends a StorageClasses. 
+---
+= Opciones de configuración y ejemplos de ONTAP SAN
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Crea y usa los controladores SAN de ONTAP con tu instalación de Trident. Esta sección ofrece ejemplos de configuración de backend y detalles para mapear backends a StorageClasses. link:https://docs.netapp.com/us-en/asa-r2/get-started/learn-about.html["Sistemas ASA r2"^] se diferencian de otros sistemas ONTAP (ASA, AFF y FAS) en la implementación de su capa de almacenamiento. Estas variaciones afectan el uso de ciertos parámetros, como se indica. link:https://docs.netapp.com/us-en/asa-r2/learn-more/hardware-comparison.html["Conoce más sobre las diferencias entre los sistemas ASA r2 y otros sistemas ONTAP"^]. En la configuración del backend de Trident, no necesitas especificar que tu sistema es ASA r2. Cuando seleccionas  `ontap-san` como  `storageDriverName`, Trident detecta automáticamente el sistema ASA r2 u otros sistemas ONTAP. Algunos parámetros de configuración del backend no aplican a los sistemas ASA r2, como se indica en la tabla a continuación.
+
+
+NOTE: Solo el controlador `ontap-san` (con protocolos iSCSI, NVMe/TCP y FC) es compatible con los sistemas ASA r2.
+
+
+
+[[backend-configuration-options]]
+== Opciones de configuración del backend
+
+A partir de la versión 26.06, puedes activar la asignación equilibrada de ONTAP para que ONTAP seleccione el agregado para los nuevos volúmenes. Consulta link:ontap-balanced-placement.html["Utiliza la distribución equilibrada con los backends de ONTAP"] para conocer los requisitos y ver ejemplos.
+
+Consulta la siguiente tabla para ver las opciones de configuración del backend:
+
+[cols="1,3,2"]
+|===
+| Parámetro | Descripción | Predeterminado 
+
+
+| `version` |  | Siempre 1 
+
+
+| `storageDriverName` | Nombre del controlador de almacenamiento. No se puede modificar después de la creación. Para actualizar este parámetro, debes crear un nuevo backend. | `ontap-san` o  `ontap-san-economy` 
+
+
+| `backendName` | Nombre personalizado o el backend de almacenamiento | Nombre del driver + "_" + dataLIF 
+
+
+| `managementLIF`  a| 
+Dirección IP de un LIF de gestión de clúster o SVM.
+
+Se puede especificar un nombre de dominio completo (FQDN).
+
+Se puede configurar para usar direcciones IPv6 si Trident se instaló usando el flag de IPv6. Las direcciones IPv6 deben definirse entre corchetes, como `[28e8:d9fb:a825:b7bf:69a8:d02f:9e7b:3555]`.
+
+Para una conmutación de sitios sin interrupciones de MetroCluster, consulta el <<mcc-best>>.
+
+
+NOTE: Si usas credenciales "vsadmin", `managementLIF` debe ser el de la SVM; si usas credenciales "admin", `managementLIF` debe ser el del clúster.
+| "10.0.0.1", "[2001:1234:abcd::fefe]" 
+
+
+| `dataLIF` | Dirección IP del LIF de protocolo. Se puede configurar para usar direcciones IPv6 si Trident se instaló usando el flag de IPv6. Las direcciones IPv6 deben definirse entre corchetes, como `[28e8:d9fb:a825:b7bf:69a8:d02f:9e7b:3555]`. *No especifiques para iSCSI.* Trident usa link:https://docs.netapp.com/us-en/ontap/san-admin/selective-lun-map-concept.html["Mapa LUN selectivo de ONTAP"^] para descubrir los LIF de iSCSI necesarios para establecer una sesión multipath. Se genera una advertencia si `dataLIF` se define explícitamente. *Omite para MetroCluster.* Consulta el <<mcc-best>>. | Derivado por la SVM 
+
+
+| `svm` | Máquina virtual de almacenamiento a usar *Omitir para MetroCluster.* Consulta el <<mcc-best>>. | Se deriva si se especifica un SVM `managementLIF` 
+
+
+| `useCHAP` | Usa CHAP para autenticar iSCSI para los controladores ONTAP SAN [parámetro booleano]. Establécelo en `true` para que Trident configure y use CHAP bidireccional como la autenticación predeterminada para el SVM dado en el backend. Consulta link:ontap-san-prep.html["Prepárate para configurar el backend con controladores SAN de ONTAP"] para obtener más detalles. *No es compatible con FCP o NVMe/TCP.* | `false` 
+
+
+| `chapInitiatorSecret` | Secreto del iniciador de CHAP. Requerido si `useCHAP=true` | "" 
+
+
+| `labels` | Conjunto de etiquetas arbitrarias con formato JSON para aplicar en volúmenes | "" 
+
+
+| `chapTargetInitiatorSecret` | Secreto del iniciador de destino CHAP. Requerido si `useCHAP=true` | "" 
+
+
+| `chapUsername` | Nombre de usuario de entrada. Requerido si `useCHAP=true` | "" 
+
+
+| `chapTargetUsername` | Nombre de usuario de destino. Requerido si `useCHAP=true` | "" 
+
+
+| `clientCertificate` | Valor codificado en Base64 del certificado del cliente. Usado para auth basada en certificados | "" 
+
+
+| `clientPrivateKey` | Valor codificado en Base64 de la clave privada del cliente. Usado para auth basada en certificados | "" 
+
+
+| `trustedCACertificate` | Valor codificado en Base64 del certificado de CA de confianza. Opcional. Se usa para la autenticación basada en certificados. | "" 
+
+
+| `username` | Nombre de usuario necesario para comunicarte con el clúster ONTAP. Se utiliza para la autenticación basada en credenciales. Para la autenticación de Active Directory, mira link:../trident-use/ontap-san-examples.html#authenticate-trident-to-a-backend-svm-using-active-directory-credentials["Autentica Trident en un SVM backend usando credenciales de Active Directory"]. | "" 
+
+
+| `password` | Contraseña necesaria para comunicarte con el clúster ONTAP. Se utiliza para la autenticación basada en credenciales. Para la autenticación de Active Directory, mira link:../trident-use/ontap-san-examples.html#authenticate-trident-to-a-backend-svm-using-active-directory-credentials["Autentica Trident en un SVM backend usando credenciales de Active Directory"]. | "" 
+
+
+| `svm` | Máquina virtual de almacenamiento que vas a usar | Se deriva si se especifica un SVM `managementLIF` 
+
+
+| `storagePrefix` | Prefijo que se utiliza al aprovisionar nuevos volúmenes en el SVM. No se puede modificar posteriormente. Para actualizar este parámetro, necesitas crear un nuevo backend. | `trident` 
+
+
+| `aggregate`  a| 
+Agregado para el aprovisionamiento (opcional; si se configura, debe asignarse al SVM). Para el `ontap-nas-flexgroup` driver, esta opción se ignora. Si no se asigna, se puede utilizar cualquiera de los agregados disponibles para aprovisionar un volumen FlexGroup.
+
+
+NOTE: Cuando se actualiza el agregado en SVM, se actualiza automáticamente en Trident mediante la consulta a SVM sin necesidad de reiniciar el controlador de Trident. Cuando has configurado un agregado específico en Trident para aprovisionar volúmenes, si el agregado se renombra o se traslada fuera del SVM, el backend pasa al estado de fallo en Trident mientras consulta el agregado de SVM. Debes cambiar el agregado por uno que esté presente en el SVM o eliminarlo por completo para que el backend vuelva a estar en línea.
+
+*No especificar para sistemas ASA r2*.
+
+*No especifiques cuándo  `useBalancedPlacement` está configurado como  `true`.*
+ a| 
+""
+
+
+
+| `useBalancedPlacement`  a| 
+Delegar la selección de agregados para nuevos volúmenes a ONTAP [booleano]. Requiere ONTAP 9.19.1 o posterior y  `useREST` configurado en  `true`. No se puede combinar con  `aggregate`.
+
+Consulta link:ontap-balanced-placement.html["Utiliza la distribución equilibrada con los backends de ONTAP"] para conocer los requisitos y ver ejemplos.
+| `false` 
+
+
+| `limitAggregateUsage` | Falla el aprovisionamiento si el uso es superior a este porcentaje. Si estás usando un backend de Amazon FSx para NetApp ONTAP, no especifiques  `limitAggregateUsage`. Los  `fsxadmin` y  `vsadmin` no tienen los permisos necesarios para recuperar el uso agregado y limitarlo usando Trident. *No especificar para sistemas ASA r2*. | "" (no aplicado por defecto) 
+
+
+| `limitVolumeSize` | Falla el aprovisionamiento si el tamaño del volumen solicitado supera este valor. También restringe el tamaño máximo de los volúmenes que gestiona para LUNs. | "" (no aplicado por defecto) 
+
+
+| `lunsPerFlexvol` | Máximo de LUNs por FlexVol, debe estar en el rango [50, 200] | `100` 
+
+
+| `debugTraceFlags` | Indicadores de depuración para utilizar cuando estés solucionando problemas. Por ejemplo, {"api":false, "method":true} no lo uses a menos que estés solucionando problemas y necesites un volcado detallado del registro. | `null` 
+
+
+| `useREST`  a| 
+Parámetro booleano para usar las ONTAP REST APIs.
+
+ `useREST`Cuando se establece en `true`, Trident usa las ONTAP REST APIs para comunicarse con el backend; cuando se establece en `false`, Trident usa llamadas ONTAPI (ZAPI) para comunicarse con el backend. Esta función requiere ONTAP 9.11.1 y versiones posteriores. Además, el rol de inicio de sesión de ONTAP utilizado debe tener acceso a la aplicación  `ontapi`. Esto se cumple con los roles predefinidos  `vsadmin` y  `cluster-admin`. A partir de la versión Trident 24.06 y ONTAP 9.15.1 o posteriores,  `useREST`está configurado en `true`de forma predeterminada; cambia  `useREST` a `false` para usar llamadas ONTAPI (ZAPI).
+
+`useREST` está totalmente calificado para NVMe/TCP.
+
+
+NOTE: NVMe solo es compatible con las API REST de ONTAP y no es compatible con ONTAPI (ZAPI).
+
+*Si se especifica, siempre configúralo en  `true` para sistemas ASA r2*.
+| `true` para ONTAP 9.15.1 o posterior, de lo contrario  `false`. 
+
+
+ a| 
+`sanType`
+| Usa para seleccionar  `iscsi` para iSCSI,  `nvme` para NVMe/TCP o  `fcp` para SCSI sobre Fibre Channel (FC). | `iscsi` si está en blanco 
+
+
+| `formatOptions`  a| 
+Utiliza `formatOptions` para especificar argumentos de línea de comandos para el comando `mkfs`, que se aplica cada vez que se formatea un volumen. Esto te permite formatear el volumen según tus preferencias. Asegúrate de especificar formatOptions de forma similar a las opciones del comando mkfs, excluyendo la ruta del dispositivo. Ejemplo: "-E nodiscard"
+
+*Compatible con  `ontap-san` y  `ontap-san-economy` controladores con el protocolo iSCSI.* *Además, compatible con sistemas ASA r2 cuando usas los protocolos iSCSI y NVMe/TCP.*
+ a| 
+
+
+
+| `limitVolumePoolSize` | Tamaño máximo solicitable de FlexVol al utilizar LUNs en el backend de ontap-san-economy. | "" (no aplicado por defecto) 
+
+
+| `denyNewVolumePools` | Restringe  `ontap-san-economy` a los backends crear nuevos volúmenes FlexVol para contener sus LUN. Solo se utilizan los FlexVol ya existentes para el aprovisionamiento de nuevos PV. |  
+|===
+
+
+[[recommendations-for-using-formatoptions]]
+=== Recomendaciones para usar formatOptions
+
+Trident recomienda las siguientes opciones para acelerar el proceso de formateo:
+
+* *-E nodiscard (ext3, ext4):* No intentes descartar bloques al momento de ejecutar mkfs (descartar bloques inicialmente es útil en dispositivos de estado sólido y almacenamiento disperso o Thin-Provisioning). Esto reemplaza la opción obsoleta "-K" y es aplicable a los sistemas de archivos ext3 y ext4.
+* *-K (xfs):* No intentes descartar bloques durante la ejecución de mkfs. Esta opción es aplicable al sistema de archivos xfs.
+
+
+
+
+[[authenticate-trident-to-a-backend-svm-using-active-directory-credentials]]
+=== Autentica Trident en un SVM backend usando credenciales de Active Directory
+
+Puedes configurar Trident para que se autentique en una SVM de backend usando credenciales de Active Directory (AD). Antes de que una cuenta de AD pueda acceder a la SVM, tienes que configurar el acceso del controlador de dominio de AD al clúster o a la SVM. Para la administración del clúster con una cuenta de AD, tienes que crear un domain tunnel. Consulta link:https://docs.netapp.com/us-en/ontap/authentication/enable-ad-users-groups-access-cluster-svm-task.html["Configura el acceso al controlador de dominio de Active Directory en ONTAP"^] para obtener más detalles.
+
+.pasos
+. Configura los ajustes de Domain Name System (DNS) para un SVM de backend:
++
+`vserver services dns create -vserver <svm_name> -dns-servers <dns_server_ip1>,<dns_server_ip2>`
+
+. Ejecuta el siguiente comando para crear una cuenta de equipo para la SVM en Active Directory:
++
+`vserver active-directory create -vserver DataSVM -account-name ADSERVER1 -domain demo.netapp.com`
+
+. Usa este comando para crear un usuario o grupo de AD para administrar el clúster o SVM
++
+`security login create -vserver <svm_name> -user-or-group-name <ad_user_or_group> -application <application> -authentication-method domain -role vsadmin`
+
+. En el archivo de configuración del backend de Trident, establece los parámetros  `username` y  `password` en el nombre de usuario o grupo de AD y la contraseña, respectivamente.
+
+
+
+
+[[backend-configuration-options-for-provisioning-volumes]]
+== Opciones de configuración de backend para aprovisionar volúmenes
+
+Puedes controlar el aprovisionamiento predeterminado usando estas opciones en la  `defaults` sección de la configuración. Por ejemplo, mira los ejemplos de configuración abajo.
+
+[cols="1,3,2"]
+|===
+| Parámetro | Descripción | Predeterminado 
+
+
+| `spaceAllocation` | Asignación de espacio para LUNs | "verdadero" *Si se especifica, configúralo en  `true` para sistemas ASA r2*. 
+
+
+| `spaceReserve` | Modo de reserva de espacio; "ninguno" (thin) o "volumen" (thick). *Configúralo en  `none` sistemas ASA r2*. | "none" 
+
+
+| `snapshotPolicy` | Política de SnapVault que se va a usar. *Establece en  `none` para sistemas ASA r2*. | "none" 
+
+
+| `qosPolicy` | Grupo de políticas de QoS para asignar a los volúmenes creados. Elige uno de qosPolicy o adaptiveQosPolicy por pool de almacenamiento/backend. Usar grupos de políticas de QoS con Trident requiere ONTAP 9.8 o una versión posterior. Deberías usar un grupo de políticas de QoS no compartido y asegurarte de que el grupo de políticas se aplique a cada componente individualmente. Un grupo de políticas de QoS compartido impone el límite máximo para el rendimiento total de todas las cargas de trabajo. | "" 
+
+
+| `adaptiveQosPolicy` | Grupo de políticas de QoS adaptativo para asignar a los volúmenes creados. Elige uno de qosPolicy o adaptiveQosPolicy por cada pool de almacenamiento/backend | "" 
+
+
+| `snapshotReserve` | Porcentaje de volumen reservado para instantáneas. *No especificar para sistemas ASA r2*. | "0" si  `snapshotPolicy` es "none", de lo contrario "" 
+
+
+| `splitOnClone` | Divide un clon de su padre al momento de su creación | "false" 
+
+
+| `encryption` | Activa NetApp Volume Encryption (NVE) en el nuevo volumen; el valor predeterminado es  `false`. NVE debe estar licenciado y habilitado en el clúster para usar esta opción. Si NAE está habilitado en el backend, cualquier volumen aprovisionado en Trident tendrá NAE habilitado. Para más información, consulta: link:../trident-reco/security-reco.html["Cómo funciona Trident con NVE y NAE"]. | "falso" *Si se especifica, configúralo en  `true` para sistemas ASA r2*. 
+
+
+| `luksEncryption` | Activa el cifrado LUKS. Consulta link:../trident-reco/security-luks.html["Usa Linux Unified Key Setup (LUKS)"]. | "" *Establécelo en `false` para sistemas ASA r2*. 
+
+
+| `tieringPolicy` | Política de niveles para usar "none" *No especificar para sistemas ASA r2*. |  
+
+
+| `nameTemplate` | Plantilla para crear nombres de volúmenes personalizados. | "" 
+|===
+
+
+[[volume-provisioning-examples]]
+=== Ejemplos de aprovisionamiento de volumen
+
+Aquí tienes un ejemplo con valores predeterminados definidos:
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: trident_svm
+username: admin
+password: <password>
+labels:
+  k8scluster: dev2
+  backend: dev2-sanbackend
+storagePrefix: alternate-trident
+debugTraceFlags:
+  api: false
+  method: true
+defaults:
+  spaceReserve: volume
+  qosPolicy: standard
+  spaceAllocation: 'false'
+  snapshotPolicy: default
+  snapshotReserve: '10'
+
+----
+
+NOTE: Para todos los volúmenes creados usando el `ontap-san` driver, Trident añade un 10 % extra de capacidad a la FlexVol para acomodar los metadatos del LUN. El LUN se aprovisiona con el tamaño exacto que el usuario solicita en el PVC. Trident añade un 10 % a la FlexVol (se muestra como tamaño disponible en ONTAP). Ahora los usuarios obtienen la cantidad de capacidad utilizable que solicitaron. Este cambio también evita que los LUN se vuelvan de solo lectura a menos que se utilice por completo el espacio disponible. Esto no se aplica a ontap-san-economy.
+
+Para los backends que definen `snapshotReserve`, Trident calcula el tamaño de los volúmenes de la siguiente manera:
+
+[listing]
+----
+Total volume size = [(PVC requested size) / (1 - (snapshotReserve percentage) / 100)] * 1.1
+----
+El 1.1 es el 10 % adicional que Trident añade a la FlexVol para alojar los metadatos del LUN. Para  `snapshotReserve` = 5 %, y una solicitud de PVC de 5 GiB, el tamaño total del volumen es 5.79 GiB y el tamaño disponible es 5.5 GiB. El  `volume show` comando debería mostrar resultados similares a este ejemplo:
+
+image::../media/vol-show-san.png[Muestra la salida del comando volume show.]
+
+Actualmente, cambiar el tamaño es la única manera de usar el nuevo cálculo para un volumen existente.
+
+
+
+[[minimal-configuration-examples]]
+== Ejemplos de configuración mínima
+
+Los siguientes ejemplos muestran configuraciones básicas que dejan la mayoría de los parámetros en sus valores predeterminados. Esta es la forma más fácil de definir un backend.
+
+
+NOTE: Si estás usando Amazon FSx en NetApp ONTAP con Trident, NetApp recomienda que especifiques nombres DNS para las LIFs en vez de direcciones IP.
+
+.Ejemplo de ONTAP SAN
+[%collapsible]
+====
+Esta es una configuración básica usando el  `ontap-san` driver.
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: svm_iscsi
+labels:
+  k8scluster: test-cluster-1
+  backend: testcluster1-sanbackend
+username: vsadmin
+password: <password>
+----
+====
+.Ejemplo de MetroCluster
+[#mcc-best%collapsible]
+====
+Puedes configurar el backend para evitar tener que actualizar manualmente la definición del backend después de la conmutación de sitios y la conmutación de vuelta durante link:../trident-reco/backup.html#svm-replication-and-recovery["Replicación y recuperación de SVM"].
+
+Para una conmutación de sitios y reversión sin problemas, especifica el SVM usando  `managementLIF` y omite los parámetros  `svm`. Por ejemplo:
+
+[source, yaml]
+----
+version: 1
+storageDriverName: ontap-san
+managementLIF: 192.168.1.66
+username: vsadmin
+password: password
+----
+====
+.Ejemplo de ONTAP SAN economy
+[%collapsible]
+====
+[source, yaml]
+----
+version: 1
+storageDriverName: ontap-san-economy
+managementLIF: 10.0.0.1
+svm: svm_iscsi_eco
+username: vsadmin
+password: <password>
+----
+====
+.Ejemplo de autenticación basada en certificados
+[%collapsible]
+====
+En este ejemplo de configuración básica  `clientCertificate`,  `clientPrivateKey` y  `trustedCACertificate` (opcional, si usas una CA confiable) se completan en  `backend.json` y toman los valores codificados en base64 del certificado del cliente, la clave privada y el certificado de CA confiable, respectivamente.
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+backendName: DefaultSANBackend
+managementLIF: 10.0.0.1
+svm: svm_iscsi
+useCHAP: true
+chapInitiatorSecret: cl9qxIm36DKyawxy
+chapTargetInitiatorSecret: rqxigXgkesIpwxyz
+chapTargetUsername: iJF4heBRT0TCwxyz
+chapUsername: uh2aNCLSd6cNwxyz
+clientCertificate: ZXR0ZXJwYXB...ICMgJ3BhcGVyc2
+clientPrivateKey: vciwKIyAgZG...0cnksIGRlc2NyaX
+trustedCACertificate: zcyBbaG...b3Igb3duIGNsYXNz
+----
+====
+.Ejemplos de CHAP bidireccional
+[%collapsible]
+====
+Estos ejemplos crean un backend con  `useCHAP` configurado en  `true`.
+
+.Ejemplo de ONTAP SAN CHAP
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: svm_iscsi
+labels:
+  k8scluster: test-cluster-1
+  backend: testcluster1-sanbackend
+useCHAP: true
+chapInitiatorSecret: cl9qxIm36DKyawxy
+chapTargetInitiatorSecret: rqxigXgkesIpwxyz
+chapTargetUsername: iJF4heBRT0TCwxyz
+chapUsername: uh2aNCLSd6cNwxyz
+username: vsadmin
+password: <password>
+----
+.Ejemplo de ONTAP SAN economy CHAP
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san-economy
+managementLIF: 10.0.0.1
+svm: svm_iscsi_eco
+useCHAP: true
+chapInitiatorSecret: cl9qxIm36DKyawxy
+chapTargetInitiatorSecret: rqxigXgkesIpwxyz
+chapTargetUsername: iJF4heBRT0TCwxyz
+chapUsername: uh2aNCLSd6cNwxyz
+username: vsadmin
+password: <password>
+----
+====
+.Ejemplo de distribución equilibrada
+[%collapsible]
+====
+Este ejemplo habilita la distribución equilibrada de ONTAP para que ONTAP seleccione el agregado para los nuevos volúmenes. La distribución equilibrada requiere ONTAP 9.19.1 o una versión posterior. Consulta link:ontap-balanced-placement.html["Utiliza la distribución equilibrada con los backends de ONTAP"] para obtener más detalles.
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+backendName: san-balanced-placement
+managementLIF: 10.0.0.1
+svm: svm_iscsi
+username: vsadmin
+password: <password>
+useBalancedPlacement: true
+----
+====
+.Ejemplo de NVMe/TCP
+[%collapsible]
+====
+Debes tener una SVM configurada con NVMe en tu backend de ONTAP. Esta es una configuración básica de backend para NVMe/TCP.
+
+[source, yaml]
+----
+---
+version: 1
+backendName: NVMeBackend
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: svm_nvme
+username: vsadmin
+password: password
+sanType: nvme
+useREST: true
+----
+====
+.Ejemplo de SCSI sobre FC (FCP)
+[%collapsible]
+====
+Debes tener una SVM configurada con FC en tu backend de ONTAP. Esta es una configuración básica de backend para FC.
+
+[source, yaml]
+----
+---
+version: 1
+backendName: fcp-backend
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: svm_fc
+username: vsadmin
+password: password
+sanType: fcp
+useREST: true
+----
+====
+.Ejemplo de configuración de backend con nameTemplate
+[%collapsible]
+====
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+backendName: ontap-san-backend
+managementLIF: <ip address>
+svm: svm0
+username: <admin>
+password: <password>
+defaults:
+  nameTemplate: "{{.volume.Name}}_{{.labels.cluster}}_{{.volume.Namespace}}_{{.vo\
+    lume.RequestName}}"
+labels:
+  cluster: ClusterA
+  PVC: "{{.volume.Namespace}}_{{.volume.RequestName}}"
+----
+====
+.formatOptions ejemplo para el controlador ontap-san-economy
+[%collapsible]
+====
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san-economy
+managementLIF: ""
+svm: svm1
+username: ""
+password: "!"
+storagePrefix: whelk_
+debugTraceFlags:
+  method: true
+  api: true
+defaults:
+  formatOptions: -E nodiscard
+----
+====
+
+
+[[examples-of-backends-with-virtual-pools]]
+== Ejemplos de backends con pools virtuales
+
+En estos archivos de definición de backend de ejemplo, se establecen valores predeterminados específicos para todos los grupos de almacenamiento, como  `spaceReserve` en ninguno,  `spaceAllocation` en falso y  `encryption` en falso. Los grupos virtuales se definen en la sección de almacenamiento.
+
+Trident establece las etiquetas de aprovisionamiento en el campo "Comentarios". Los comentarios se establecen en el volumen FlexVol. Trident copia todas las etiquetas presentes en un pool virtual al volumen de almacenamiento durante el aprovisionamiento. Para mayor comodidad, los administradores de almacenamiento pueden definir etiquetas por pool virtual y agrupar volúmenes por etiqueta.
+
+En estos ejemplos, algunos de los pools de almacenamiento establecen sus propios `spaceReserve`, `spaceAllocation` y `encryption` valores, y algunos pools anulan los valores predeterminados.
+
+.Ejemplo de ONTAP SAN
+[%collapsible]
+====
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+managementLIF: 10.0.0.1
+svm: svm_iscsi
+useCHAP: true
+chapInitiatorSecret: cl9qxIm36DKyawxy
+chapTargetInitiatorSecret: rqxigXgkesIpwxyz
+chapTargetUsername: iJF4heBRT0TCwxyz
+chapUsername: uh2aNCLSd6cNwxyz
+username: vsadmin
+password: <password>
+defaults:
+  spaceAllocation: "false"
+  encryption: "false"
+  qosPolicy: standard
+labels:
+  store: san_store
+  kubernetes-cluster: prod-cluster-1
+region: us_east_1
+storage:
+  - labels:
+      protection: gold
+      creditpoints: "40000"
+    zone: us_east_1a
+    defaults:
+      spaceAllocation: "true"
+      encryption: "true"
+      adaptiveQosPolicy: adaptive-extreme
+  - labels:
+      protection: silver
+      creditpoints: "20000"
+    zone: us_east_1b
+    defaults:
+      spaceAllocation: "false"
+      encryption: "true"
+      qosPolicy: premium
+  - labels:
+      protection: bronze
+      creditpoints: "5000"
+    zone: us_east_1c
+    defaults:
+      spaceAllocation: "true"
+      encryption: "false"
+
+----
+====
+.Ejemplo de ONTAP SAN economy
+[%collapsible]
+====
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san-economy
+managementLIF: 10.0.0.1
+svm: svm_iscsi_eco
+useCHAP: true
+chapInitiatorSecret: cl9qxIm36DKyawxy
+chapTargetInitiatorSecret: rqxigXgkesIpwxyz
+chapTargetUsername: iJF4heBRT0TCwxyz
+chapUsername: uh2aNCLSd6cNwxyz
+username: vsadmin
+password: <password>
+defaults:
+  spaceAllocation: "false"
+  encryption: "false"
+labels:
+  store: san_economy_store
+region: us_east_1
+storage:
+  - labels:
+      app: oracledb
+      cost: "30"
+    zone: us_east_1a
+    defaults:
+      spaceAllocation: "true"
+      encryption: "true"
+  - labels:
+      app: postgresdb
+      cost: "20"
+    zone: us_east_1b
+    defaults:
+      spaceAllocation: "false"
+      encryption: "true"
+  - labels:
+      app: mysqldb
+      cost: "10"
+    zone: us_east_1c
+    defaults:
+      spaceAllocation: "true"
+      encryption: "false"
+  - labels:
+      department: legal
+      creditpoints: "5000"
+    zone: us_east_1c
+    defaults:
+      spaceAllocation: "true"
+      encryption: "false"
+
+----
+====
+.Ejemplo de NVMe/TCP
+[%collapsible]
+====
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: ontap-san
+sanType: nvme
+managementLIF: 10.0.0.1
+svm: nvme_svm
+username: vsadmin
+password: <password>
+useREST: true
+defaults:
+  spaceAllocation: "false"
+  encryption: "true"
+storage:
+  - labels:
+      app: testApp
+      cost: "20"
+    defaults:
+      spaceAllocation: "false"
+      encryption: "false"
+
+----
+====
+
+
+[[map-backends-to-storageclasses]]
+== Asigna backends a StorageClasses
+
+Las siguientes definiciones de StorageClass hacen referencia a <<Ejemplos de backends con pools virtuales>>. Usando el campo  `parameters.selector`, cada StorageClass indica qué grupos virtuales se pueden usar para alojar un volumen. El volumen ahora tiene los aspectos definidos en el grupo virtual elegido.
+
+* El  `protection-gold` StorageClass se asigna al primer grupo virtual en el  `ontap-san` backend. Este es el único grupo que ofrece protección de nivel gold.
++
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: protection-gold
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "protection=gold"
+  fsType: "ext4"
+----
+* El  `protection-not-gold` StorageClass se asigna al segundo y tercer grupo virtual en  `ontap-san` backend. Estos son los únicos grupos que ofrecen un nivel de protección distinto a gold.
++
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: protection-not-gold
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "protection!=gold"
+  fsType: "ext4"
+----
+* El  `app-mysqldb` StorageClass se asigna al tercer grupo virtual en  `ontap-san-economy` backend. Este es el único grupo que ofrece configuración de grupo de almacenamiento para la app tipo mysqldb.
++
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: app-mysqldb
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "app=mysqldb"
+  fsType: "ext4"
+----
+* El  `protection-silver-creditpoints-20k` StorageClass se asigna al segundo grupo virtual en  `ontap-san` backend. Este es el único grupo que ofrece protección de nivel silver y 20 000 puntos de crédito.
++
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: protection-silver-creditpoints-20k
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "protection=silver; creditpoints=20000"
+  fsType: "ext4"
+----
+* El  `creditpoints-5k` StorageClass se asigna al tercer grupo virtual en el backend `ontap-san` y al cuarto grupo virtual en el backend `ontap-san-economy`. Estas son las únicas ofertas de grupos con 5000 puntos de crédito.
++
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: creditpoints-5k
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "creditpoints=5000"
+  fsType: "ext4"
+----
+* El `my-test-app-sc` StorageClass se asigna al grupo virtual `testAPP` en el controlador `ontap-san` con `sanType: nvme`. Este es el único grupo que ofrece `testApp`.
++
+[source, yaml]
+----
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: my-test-app-sc
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: "app=testApp"
+  fsType: "ext4"
+----
+
+
+Trident decide qué grupo virtual se selecciona y garantiza que se cumpla el requisito de almacenamiento.

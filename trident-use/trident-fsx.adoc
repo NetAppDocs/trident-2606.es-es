@@ -1,0 +1,150 @@
+---
+sidebar: sidebar 
+permalink: trident-use/trident-fsx.html 
+keywords: Amazon FSx for NetApp ONTAP, FSx for ONTAP, deploy Trident, integrate Trident, Trident 
+summary: 'Al usar Trident con Amazon FSx for NetApp ONTAP, puedes asegurarte de que tus clústeres de Kubernetes que se ejecutan en Amazon Elastic Kubernetes Service (EKS) puedan aprovisionar volúmenes persistentes de bloques y archivos respaldados por ONTAP.' 
+---
+= Usa Trident con Amazon FSx for NetApp ONTAP
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+https://docs.aws.amazon.com/fsx/latest/ONTAPGuide/what-is-fsx-ontap.html["Amazon FSx for NetApp ONTAP"^] es un servicio de AWS totalmente administrado que ejecuta sistemas de archivos impulsados por el sistema operativo de almacenamiento NetApp ONTAP. Proporciona características, rendimiento y administración de ONTAP con la escalabilidad y la simplicidad operativa de AWS. Un sistema de archivos es el recurso principal en Amazon FSx y es análogo a un clúster ONTAP local. Cada sistema de archivos contiene una o varias máquinas virtuales de almacenamiento (SVM), y cada SVM contiene uno o varios volúmenes que almacenan archivos y directorios. Esta integración permite a los clústeres de Kubernetes que se ejecutan en Amazon Elastic Kubernetes Service (EKS) aprovisionar volúmenes persistentes respaldados por ONTAP para cargas de trabajo de bloques y archivos.
+
+
+
+[[requirements]]
+== Requisitos
+
+Además de link:../trident-get-started/requirements.html["Requisitos de Trident"], para integrar FSx for ONTAP con Trident, necesitas:
+
+* Un clúster de Amazon EKS existente o un clúster de Kubernetes autoadministrado con  `kubectl` instalado.
+* Un sistema de archivos Amazon FSx para NetApp ONTAP existente y una máquina virtual de almacenamiento (SVM) a la que se puede acceder desde los nodos de trabajo de tu clúster.
+* Nodos worker que están preparados para link:worker-node-prep.html["NFS o iSCSI"].
++
+
+NOTE: Asegúrate de seguir los pasos de preparación de nodo necesarios para Amazon Linux y Ubuntu https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html["Amazon Machine Images"^] (AMIs) según tu tipo de AMI de EKS.
+
+
+
+
+
+[[considerations]]
+== Consideraciones
+
+* Volúmenes SMB:
++
+** Los volúmenes SMB son compatibles usando solo el `ontap-nas` driver.
+** Los volúmenes SMB no son compatibles con el complemento Trident EKS.
+** Trident solo admite volúmenes SMB montados en pods que se ejecutan en nodos Windows. Consulta link:worker-node-prep.html#prepare-to-provision-smb-volumes["Prepárate para aprovisionar volúmenes SMB"] para obtener más detalles.
+
+
+* Antes de Trident 24.02, los volúmenes creados en sistemas de archivos de Amazon FSx que tenían copias de seguridad automáticas habilitadas no podían ser eliminados por Trident. Para evitar este problema en Trident 24.02 o versiones posteriores, especifica el `fsxFilesystemID`, AWS `apiRegion`, AWS `apikey` y AWS `secretKey` en el archivo de configuración del backend para AWS FSx for ONTAP.
++
+
+NOTE: Si estás especificando una función de IAM para Trident, entonces puedes omitir especificar los campos  `apiRegion`,  `apiKey` y  `secretKey` explícitamente para Trident. Para obtener más información, consulta link:../trident-use/trident-fsx-examples.html["Opciones de configuración de FSx for ONTAP y ejemplos"].
+
+
+
+
+
+[[simultaneous-usage-of-trident-saniscsi-and-ebs-csi-driver]]
+=== Uso simultáneo de Trident SAN/iSCSI y el controlador EBS-CSI
+
+Si planeas usar controladores ontap-san (por ejemplo, iSCSI) con AWS (EKS, ROSA, EC2 o cualquier otra instancia), la configuración de multivía requerida en los nodos podría entrar en conflicto con el controlador CSI de Amazon Elastic Block Store (EBS). Para asegurarte de que la multivía funcione sin interferir con los discos EBS en el mismo nodo, necesitas excluir EBS en tu configuración de multivía. Este ejemplo muestra un `multipath.conf` archivo que incluye la configuración requerida de Trident y excluye los discos EBS de la multivía:
+
+[listing]
+----
+defaults {
+    find_multipaths no
+}
+blacklist {
+    device {
+        vendor "NVME"
+        product "Amazon Elastic Block Store"
+    }
+}
+----
+
+
+[[authentication]]
+== Autenticación
+
+Trident ofrece dos modos de autenticación.
+
+* Basado en credenciales (recomendado): almacena las credenciales de forma segura en AWS Secrets Manager. Puedes usar el  `fsxadmin` usuario para tu sistema de archivos o el  `vsadmin` usuario configurado para tu SVM.
++
+
+WARNING: Trident espera ejecutarse como un `vsadmin` usuario de SVM o como un usuario con un nombre diferente que tenga el mismo rol. Amazon FSx for NetApp ONTAP tiene un `fsxadmin` usuario que es un reemplazo limitado del usuario de clúster de ONTAP `admin`. Te recomendamos mucho usar `vsadmin` con Trident.
+
+* Basado en certificado: Trident se comunicará con la SVM en tu sistema de archivos FSx usando un certificado instalado en tu SVM.
+
+
+Para obtener detalles sobre cómo habilitar la autenticación, consulta la autenticación para tu tipo de controlador:
+
+* link:ontap-nas-prep.html["Autenticación NAS de ONTAP"]
+* link:ontap-san-prep.html["Autenticación SAN de ONTAP"]
+
+
+
+
+[[tested-amazon-machine-images-amis]]
+== Imágenes de máquina de Amazon (AMIs) probadas
+
+El clúster EKS es compatible con varios sistemas operativos, pero AWS ha optimizado ciertas Amazon Machine Images (AMIs) para contenedores y EKS. Las siguientes AMIs se han probado con NetApp Trident 25.02.
+
+|===
+
+
+| AMI | NAS | NAS-economy | iSCSI | iSCSI-economy 
+
+
+| AL2023_x86_64_STANDARD | Sí | Sí | Sí | Sí 
+
+
+| AL2_x86_64 | Sí | Sí | Sí* | Sí* 
+
+
+| BOTTLEROCKET_x86_64 | Sí** | Sí | N/A | N/A 
+
+
+| AL2023_ARM_64_STANDARD | Sí | Sí | Sí | Sí 
+
+
+| AL2_ARM_64 | Sí | Sí | Sí* | Sí* 
+
+
+| BOTTLEROCKET_ARM_64 | Sí** | Sí | N/A | N/A 
+|===
+* * No se puede eliminar el PV sin reiniciar el nodo
+* ** No funciona con NFSv3 con Trident versión 25.02.
+
+
+
+NOTE: Si la AMI que buscas no aparece aquí, no significa que no sea compatible; simplemente significa que no se ha probado. Esta lista sirve como guía para las AMI que se sabe que funcionan.
+
+*Pruebas realizadas con*:
+
+* Versión de EKS: 1.32
+* Método de instalación: Helm 25.06 y como AWS add-On 25.06
+* Para NAS se probaron tanto NFSv3 como NFSv4.1.
+* Para SAN solo se probó iSCSI, no NVMe-oF.
+
+
+*Pruebas realizadas*:
+
+* Crear: clase de almacenamiento, pvc, pod
+* Eliminar: pod, pvc (regular, qtree/lun – economy, NAS con backup de AWS)
+
+
+
+
+[[find-more-information]]
+== Encuentra más información
+
+* https://docs.aws.amazon.com/fsx/latest/ONTAPGuide/what-is-fsx-ontap.html["Documentación de Amazon FSx para NetApp ONTAP"^]
+* https://www.netapp.com/blog/amazon-fsx-for-netapp-ontap/["Entrada de blog sobre Amazon FSx para NetApp ONTAP"^]
+

@@ -1,0 +1,87 @@
+---
+sidebar: sidebar 
+permalink: trident-docker/multiple-instances-docker.html 
+keywords: deploy, Trident, docker, trident for docker, managed plugin, trident instances, alias 
+summary: Se necesitan múltiples instancias de Trident cuando deseas tener varias configuraciones de almacenamiento disponibles al mismo tiempo. La clave para tener varias instancias es darles nombres diferentes usando la opción --alias con el plugin en contenedor, o la opción --volume-driver al instanciar Trident en el host. 
+---
+= Gestiona varias instancias de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Se necesitan múltiples instancias de Trident cuando deseas tener varias configuraciones de almacenamiento disponibles al mismo tiempo. La clave para tener múltiples instancias es darles nombres diferentes usando la opción `--alias` con el plugin en contenedores, o la opción `--volume-driver` al instanciar Trident en el host.
+
+
+
+[[steps-for-docker-managed-plugin-version-1-1317-03-or-later]]
+== Pasos para el plugin gestionado por Docker (versión 1.13/17.03 o posterior)
+
+. Lanza la primera instancia especificando un alias y un archivo de configuración.
++
+[source, console]
+----
+docker plugin install --grant-all-permissions --alias silver netapp/trident-plugin:21.07 config=silver.json
+----
+. Lanza la segunda instancia, especificando un alias y un archivo de configuración diferentes.
++
+[source, console]
+----
+docker plugin install --grant-all-permissions --alias gold netapp/trident-plugin:21.07 config=gold.json
+----
+. Crea volúmenes especificando el alias como nombre del controlador.
++
+Por ejemplo, para el volumen gold:
+
++
+[source, console]
+----
+docker volume create -d gold --name ntapGold
+----
++
+Por ejemplo, para el volumen silver:
+
++
+[source, console]
+----
+docker volume create -d silver --name ntapSilver
+----
+
+
+
+
+[[steps-for-traditional-version-1-12-or-earlier]]
+== Pasos para el método tradicional (versión 1.12 o anterior)
+
+. Lanza el complemento con una configuración NFS usando un ID de controlador personalizado:
++
+[source, console]
+----
+sudo trident --volume-driver=netapp-nas --config=/path/to/config-nfs.json
+----
+. Lanza el plugin con una configuración iSCSI usando un driver ID personalizado:
++
+[source, console]
+----
+sudo trident --volume-driver=netapp-san --config=/path/to/config-iscsi.json
+----
+. Provisiona volúmenes Docker para cada instancia de driver:
++
+Por ejemplo, para NFS:
+
++
+[source, console]
+----
+docker volume create -d netapp-nas --name my_nfs_vol
+----
++
+Por ejemplo, para iSCSI:
+
++
+[source, console]
+----
+docker volume create -d netapp-san --name my_iscsi_vol
+----
+

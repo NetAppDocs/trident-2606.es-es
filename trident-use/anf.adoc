@@ -1,0 +1,185 @@
+---
+sidebar: sidebar 
+permalink: trident-use/anf.html 
+keywords: trident backend, azure netapp files, smb volumes, smb, windows, drivers, access modes, rwo, rwx, rwp, rwop, file system, aks, managed identities, azure, azure government 
+summary: Configura Azure NetApp Files como backend para Trident y usa volúmenes NFS o SMB. Trident admite identidades gestionadas e identidad de carga de trabajo en clústeres AKS. 
+---
+= Configura un backend de Azure NetApp Files
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Usa Azure NetApp Files como backend para Trident. Este backend admite volúmenes NFS y SMB. Trident admite identidades gestionadas e identidad de carga de trabajo para clústeres de Azure Kubernetes Service (AKS).
+
+
+
+[[supported-azure-cloud-environments]]
+== Entornos cloud de Azure compatibles
+
+Trident es compatible con los backends de Azure NetApp Files en varios entornos cloud de Azure.
+
+Las nubes de Azure compatibles incluyen:
+
+* Azure Commercial
+* Azure Government (Azure Government / MAG)
+* Azure China
+
+
+Cuando despliegues Trident o configures un backend de Azure NetApp Files, asegúrate de que Azure Resource Manager y los endpoints de autenticación coincidan con tu entorno de cloud de Azure.
+
+
+
+[[review-azure-netapp-files-driver-support]]
+== Revisa el soporte del controlador de Azure NetApp Files
+
+Trident proporciona el siguiente controlador de almacenamiento Azure NetApp Files.
+
+Los modos de acceso admitidos incluyen _ReadWriteOnce_ (RWO), _ReadOnlyMany_ (ROX), _ReadWriteMany_ (RWX) y _ReadWriteOncePod_ (RWOP).
+
+[cols="2,1,1,2,2"]
+|===
+| Controlador | Protocolo | volumeMode | Modos de acceso admitidos | Sistemas de archivos compatibles 
+
+
+| `azure-netapp-files`  a| 
+NFS SMB
+ a| 
+Sistema de archivos
+ a| 
+RWO, ROX, RWX, RWOP
+ a| 
+`nfs`, `smb`
+
+|===
+
+
+[[review-considerations]]
+== Revisa las consideraciones
+
+* Azure NetApp Files no admite volúmenes menores de 50 GiB. Trident crea un volumen de 50 GiB cuando se solicita un volumen menor.
+* Trident solo admite volúmenes SMB montados en pods que se ejecutan en nodos Windows.
+* Las implementaciones de Azure NetApp Files en nubes Azure no comerciales requieren puntos finales de Azure Resource Manager y de autenticación específicos para cada nube. Asegúrate de que Trident y cualquier configuración de backend usen los puntos finales apropiados para tu entorno de nube Azure.
+
+
+
+
+[[use-managed-identities-for-aks]]
+== Usa identidades gestionadas para AKS
+
+Trident es compatible con link:https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview["identidades gestionadas"^] para clústeres AKS.
+
+Si usas `tridentctl` para crear o gestionar backends de Azure NetApp Files, asegúrate de que esté configurado para el entorno de cloud de Azure correcto.
+
+Para usar identidades gestionadas, debes tener:
+
+* Un clúster de Kubernetes implementado mediante AKS
+* Identidades gestionadas configuradas en el clúster de Kubernetes de AKS
+* Trident instalado con `cloudProvider` configurado en `"Azure"`
+
+
+[role="tabbed-block"]
+====
+.Operador de Trident
+--
+Edita `tridentorchestrator_cr.yaml` y establece `cloudProvider` en `"Azure"`.
+
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentOrchestrator
+metadata:
+  name: trident
+spec:
+  debug: true
+  namespace: trident
+  imagePullPolicy: IfNotPresent
+  cloudProvider: "Azure"
+----
+--
+.Helm
+--
+El siguiente ejemplo instala Trident y configura `cloudProvider` usando la variable de entorno `$CP`:
+
+[listing]
+----
+helm install trident trident-operator-100.2606.0.tgz --create-namespace --namespace <trident-namespace> --set cloudProvider=$CP
+----
+--
+.<code>tridentctl</code>
+--
+El siguiente ejemplo instala Trident y establece la  `cloud-provider` bandera en  `Azure`:
+
+[listing]
+----
+tridentctl install --cloud-provider="Azure" -n trident
+----
+--
+====
+
+
+[[use-workload-identity-for-aks]]
+== Usa la identidad de carga de trabajo para AKS
+
+La identidad de carga de trabajo permite que los pods de Kubernetes accedan a los recursos de Azure autenticándose como una identidad de carga de trabajo.
+
+Si usas `tridentctl` para crear o gestionar backends de Azure NetApp Files, asegúrate de que esté configurado para el entorno de cloud de Azure correcto.
+
+Para usar la identidad de carga de trabajo, debes tener:
+
+* Un clúster de Kubernetes implementado mediante AKS
+* Identidad de carga de trabajo y oidc-issuer configurados en el clúster AKS Kubernetes
+* Trident instalado con `cloudProvider` configurado en `"Azure"` y `cloudIdentity` configurado en el valor de identidad de la carga de trabajo
+
+
+[role="tabbed-block"]
+====
+.Operador de Trident
+--
+Edita `tridentorchestrator_cr.yaml` y establece `cloudProvider` en `"Azure"`. Establece `cloudIdentity` en `azure.workload.identity/client-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx`.
+
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentOrchestrator
+metadata:
+  name: trident
+spec:
+  debug: true
+  namespace: trident
+  imagePullPolicy: IfNotPresent
+  cloudProvider: "Azure"
+  cloudIdentity: 'azure.workload.identity/client-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx' # Edit
+----
+--
+.Helm
+--
+Establece los valores para las opciones *cloud-provider (CP)* y *cloud-identity (CI)* usando las siguientes variables de entorno:
+
+`export CP="Azure"`
+`export CI="'azure.workload.identity/client-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx'"`
+
+El siguiente ejemplo instala Trident y establece `cloudProvider` usando `$CP` y establece `cloudIdentity` usando `$CI`:
+
+[listing]
+----
+helm install trident trident-operator-100.6.0.tgz --set cloudProvider=$CP --set cloudIdentity="$CI"
+----
+--
+.<code>tridentctl</code>
+--
+Establece los valores para las banderas *cloud provider* y *cloud identity* usando las siguientes variables de entorno:
+
+`export CP="Azure"`
+`export CI="azure.workload.identity/client-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx"`
+
+El siguiente ejemplo instala Trident y establece `cloud-provider` en `$CP` y `cloud-identity` en `$CI`:
+
+[listing]
+----
+tridentctl install --cloud-provider=$CP --cloud-identity="$CI" -n trident
+----
+--
+====

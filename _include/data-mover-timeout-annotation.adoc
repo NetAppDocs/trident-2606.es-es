@@ -1,0 +1,35 @@
+= Anotación de tiempo de espera de data mover
+:allow-uri-read: 
+
+
+
+
+[[data-mover-timeout-annotation]]
+== Anotación de tiempo de espera de data mover
+
+Durante las operaciones de copia de seguridad y restauración, puedes usar la anotación `protect.trident.netapp.io/data-mover-timeout-sec` para configurar el tiempo de espera de las operaciones de movimiento de datos. Esta anotación especifica el tiempo máximo, en segundos, que un data mover debe esperar para que se complete una operación específica antes de que se agote el tiempo de espera. Es especialmente útil en situaciones donde los problemas de red u otros factores pueden hacer que las operaciones de movimiento de datos se detengan. Ayuda a detectar y manejar operaciones detenidas, en lugar de establecer un tiempo de espera general para todo el proceso. Por ejemplo, si no se avanza en la restauración de los datos del volumen debido a problemas de red, la operación se agotará según la duración especificada.
+
+Puedes usar esta anotación en tu archivo YAML como se muestra a continuación:
+
+[source, yaml]
+----
+---
+apiVersion: protect.trident.netapp.io/v1
+kind: BackupRestore
+metadata:
+  name: bkp-restore-kopia
+  namespace: trident-protect
+  annotations: # Optional annotations to configure data movement timeout
+    protect.trident.netapp.io/data-mover-timeout-sec: "2"
+spec:
+  appVaultRef: appvault-name
+  appArchivePath: my-backup-path
+  namespaceMapping: [{"source": "my-source-namespace", "destination": "my-destination-namespace"}]
+  storageClassMapping:
+    destination: "${destinationStorageClass}"
+    source: "${sourceStorageClass}"
+----
+En este ejemplo, la anotación falla la  `BackupRestore` operación si no se produce ningún progreso en 2 segundos en la operación de restauración.
+
+
+NOTE: Si el valor de la anotación es menor o igual a 0, la operación fallará inmediatamente.

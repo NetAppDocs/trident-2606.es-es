@@ -1,0 +1,386 @@
+---
+sidebar: sidebar 
+permalink: trident-protect/trident-protect-use-execution-hooks.html 
+keywords: trident, protect, execution hooks 
+summary: Puedes crear un gancho de ejecución personalizado para una app usando Trident Protect. Necesitas tener permisos de Owner, Admin o Member para crear ganchos de ejecución. 
+---
+= Administra los hooks de ejecución de Trident Protect
+:hardbreaks:
+:allow-uri-read: 
+:nofooter: 
+:icons: font
+:linkattrs: 
+:imagesdir: ../media/
+
+
+[role="lead"]
+Un gancho de ejecución es una acción personalizada que puedes configurar para que se ejecute junto con una operación de protección de datos de una app gestionada. Por ejemplo, si tienes una app de base de datos, puedes usar un gancho de ejecución para pausar todas las transacciones de la base de datos antes de una instantánea y reanudar las transacciones después de que la instantánea esté completa. Esto garantiza instantáneas consistentes con las aplicaciones.
+
+
+
+[[types-of-execution-hooks]]
+== Tipos de hooks de ejecución
+
+Trident Protect admite los siguientes tipos de ganchos de ejecución, según cuándo pueden ejecutarse:
+
+* Previa a la instantánea
+* Posterior a la instantánea
+* Previa a la copia de seguridad
+* Posterior a la copia de seguridad
+* Post-restauración
+* Después de la conmutación por error
+
+
+
+
+[[order-of-execution]]
+=== Orden de ejecución
+
+Cuando se ejecuta una operación de protección de datos, los eventos de hook de ejecución ocurren en el siguiente orden:
+
+. Los hooks personalizados previos a la operación que sean aplicables se ejecutan en los contenedores correspondientes. Puedes crear y ejecutar tantos ganchos personalizados de ejecución previa a la operación como necesites, pero el orden de ejecución de estos ganchos antes de la operación no está garantizado ni es configurable.
+. Ocurre la congelación del sistema de archivos, si aplica. link:trident-protect-requirements.html#protecting-data-with-kubevirt-vms["Conoce más sobre cómo configurar la congelación del sistema de archivos con Trident Protect"].
+. Se realiza la operación de protección de datos.
+. Los sistemas de archivos congelados se descongelan, si aplica.
+. Todos los hooks personalizados de ejecución post-operación aplicables se ejecutan en los contenedores apropiados. Puedes crear y ejecutar tantos hooks personalizados de ejecución post-operación como necesites, pero el orden de ejecución de estos hooks después de la operación no está garantizado ni es configurable.
+
+
+Si creas varios ganchos de ejecución del mismo tipo (por ejemplo, pre-snapshot), el orden de ejecución de esos ganchos no está garantizado. Sin embargo, el orden de ejecución de ganchos de diferentes tipos sí está garantizado. Por ejemplo, este es el orden de ejecución de una configuración que tiene todos los diferentes tipos de ganchos:
+
+. Ganchos previos a la instantánea ejecutados
+. Ganchos post-snapshot ejecutados
+. Ganchos previos a la copia de seguridad ejecutados
+. Ganchos posteriores a la copia de seguridad ejecutados
+
+
+
+NOTE: El ejemplo de orden anterior solo se aplica cuando ejecutas una copia de seguridad que no usa una instantánea existente.
+
+
+NOTE: Siempre debes probar tus scripts de ganchos de ejecución antes de habilitarlos en un entorno de producción. Puedes usar el comando 'kubectl exec' para probar cómodamente los scripts. Después de habilitar los ganchos de ejecución en un entorno de producción, prueba las instantáneas y copias de seguridad resultantes para asegurarte de que son consistentes. Puedes hacer esto clonando la app en un espacio de nombres temporal, restaurando la instantánea o copia de seguridad y luego probando la app.
+
+
+NOTE: Si un hook de ejecución previo a la instantánea añade, cambia o elimina recursos de Kubernetes, esos cambios se incluyen en la instantánea o backup y en cualquier operación de restauración posterior.
+
+
+
+[[important-notes-about-custom-execution-hooks]]
+== Notas importantes sobre los ganchos de ejecución personalizados
+
+Ten en cuenta lo siguiente al planificar los hooks de ejecución para tus apps.
+
+* Un gancho de ejecución debe usar un script para realizar acciones. Muchos ganchos de ejecución pueden hacer referencia al mismo script.
+* Trident Protect requiere que los scripts que usan los hooks de ejecución estén escritos en formato de scripts de shell ejecutables.
+* El tamaño del script está limitado a 96KB.
+* Trident Protect utiliza la configuración de los execution hook y cualquier criterio de coincidencia para determinar qué hooks son aplicables a una operación de snapshot, backup o restore.
+
+
+
+NOTE: Debido a que los ganchos de ejecución a menudo reducen o deshabilitan por completo la funcionalidad de la aplicación contra la que se ejecutan, siempre debes intentar minimizar el tiempo que tardan en ejecutarse tus ganchos de ejecución personalizados. Si inicias una operación de copia de seguridad o instantánea con ganchos de ejecución asociados pero luego la cancelas, los ganchos aún pueden ejecutarse si la operación de copia de seguridad o instantánea ya ha comenzado. Esto significa que la lógica utilizada en un gancho de ejecución posterior a la copia de seguridad no puede asumir que la copia de seguridad se completó.
+
+
+
+[[execution-hook-filters]]
+== Filtros de ejecución hook
+
+Cuando añades o editas un gancho de ejecución para una aplicación, puedes añadir filtros al gancho de ejecución para gestionar en qué contenedores coincidirá el gancho. Los filtros son útiles para aplicaciones que usan la misma imagen de contenedor en todos los contenedores, pero pueden usar cada imagen para un propósito diferente (como Elasticsearch). Los filtros te permiten crear escenarios en los que los ganchos de ejecución se ejecutan en algunos, pero no necesariamente en todos los contenedores idénticos. Si creas varios filtros para un solo gancho de ejecución, se combinan con un operador lógico AND. Puedes tener hasta 10 filtros activos por gancho de ejecución.
+
+Cada filtro que añadas a un gancho de ejecución utiliza una expresión regular para identificar contenedores en tu clúster. Cuando un gancho coincide con un contenedor, el gancho ejecutará su script asociado en ese contenedor. Las expresiones regulares para los filtros utilizan la sintaxis de Regular Expression 2 (RE2), que no admite la creación de filtros que excluyan contenedores de la lista de coincidencias. Para información sobre la sintaxis que Trident Protect admite para expresiones regulares en los filtros de ganchos de ejecución, consulta https://github.com/google/re2/wiki/Syntax["Compatibilidad con la sintaxis de Regular Expression 2 (RE2)"^].
+
+
+NOTE: Si añades un filtro de espacio de nombres a un gancho de ejecución que se ejecuta después de una operación de restauración o clonación, y el origen y el destino de la restauración o clonación están en espacios de nombres diferentes, el filtro de espacio de nombres solo se aplica al espacio de nombres de destino.
+
+
+
+[[execution-hook-examples]]
+== Ejemplos de execution hook
+
+Visita el https://github.com/NetApp/Verda["Proyecto NetApp Verda GitHub"] para descargar ganchos de ejecución reales para apps populares como Apache Cassandra y Elasticsearch. También puedes ver ejemplos y obtener ideas para estructurar tus propios ganchos de ejecución personalizados.
+
+
+NOTE: Los scripts del repositorio de Verda se proporcionan «tal cual» y no cuentan con soporte oficial por parte de NetApp. NetApp solo abarca el framework de hooks de ejecución dentro de Trident Protect.
+
+
+
+[[create-an-execution-hook]]
+== Crear un gancho de ejecución
+
+Puedes crear un gancho de ejecución personalizado para una app usando Trident Protect. Necesitas tener permisos de Owner, Admin o Member para crear ganchos de ejecución.
+
+[role="tabbed-block"]
+====
+.Usa un CR
+--
+.Pasos
+. Crea el archivo de recurso personalizado (CR) y asígnale el nombre `trident-protect-hook.yaml`.
+. Configura los siguientes atributos para que coincidan con tu entorno de Trident Protect y la configuración del clúster:
++
+** *metadata.name*: (_Required_) El nombre de este recurso personalizado; elige un nombre único y sensato para tu entorno.
+** *spec.applicationRef*: (_Required_) el nombre de Kubernetes de la aplicación para la que quieres ejecutar el gancho de ejecución.
+** *spec.stage*: (_Required_) Una cadena que indica en qué etapa de la acción debe ejecutarse el gancho de ejecución. Valores posibles:
++
+*** Pre
+*** Publicar
+
+
+** *spec.action*: (_Required_) Una cadena que indica qué acción realizará el gancho de ejecución, suponiendo que coincida cualquier filtro de gancho de ejecución especificado. Valores posibles:
++
+*** Snapshot
+*** Copia de seguridad
+*** Restaurar
+*** Conmutación por error
+
+
+** *spec.enabled*: (_Opcional_) Indica si este execution hook está habilitado o deshabilitado. Si no se especifica, el valor predeterminado es true.
+** *spec.hookSource*: (_Required_) Una cadena que contiene el script de hook codificado en base64.
+** *spec.timeout*: (_Opcional_) Un número que define cuánto tiempo en minutos se permite que se ejecute el hook de ejecución. El valor mínimo es 1 minuto y el valor por defecto es 25 minutos si no se especifica.
+** *spec.arguments*: (_Opcional_) Una lista YAML de argumentos que puedes especificar para el gancho de ejecución.
+** *spec.matchingCriteria*: (_Opcional_) Una lista opcional de pares clave-valor de criterios, cada par constituye un filtro de gancho de ejecución. Puedes añadir hasta 10 filtros por gancho de ejecución.
+** *spec.matchingCriteria.type*: (_Opcional_) una cadena que identifica el tipo de filtro de gancho de ejecución. Valores posibles:
++
+*** ContainerImage
+*** ContainerName
+*** PodName
+*** PodLabel
+*** NamespaceName
+
+
+** *spec.matchingCriteria.value*: (_Opcional_) Una cadena o expresión regular que identifica el valor del filtro de ejecución.
++
+Ejemplo de YAML:
+
++
+[source, yaml]
+----
+apiVersion: protect.trident.netapp.io/v1
+kind: ExecHook
+metadata:
+  name: example-hook-cr
+  namespace: my-app-namespace
+  annotations:
+    astra.netapp.io/astra-control-hook-source-id: /account/test/hookSource/id
+spec:
+  applicationRef: my-app-name
+  stage: Pre
+  action: Snapshot
+  enabled: true
+  hookSource: IyEvYmluL2Jhc2gKZWNobyAiZXhhbXBsZSBzY3JpcHQiCg==
+  timeout: 10
+  arguments:
+    - FirstExampleArg
+    - SecondExampleArg
+  matchingCriteria:
+    - type: containerName
+      value: mysql
+    - type: containerImage
+      value: bitnami/mysql
+    - type: podName
+      value: mysql
+    - type: namespaceName
+      value: mysql-a
+    - type: podLabel
+      value: app.kubernetes.io/component=primary
+    - type: podLabel
+      value: helm.sh/chart=mysql-10.1.0
+    - type: podLabel
+      value: deployment-type=production
+----
+
+
+. Después de rellenar el archivo CR con los valores correctos, aplica el CR:
++
+[source, console]
+----
+kubectl apply -f trident-protect-hook.yaml
+----
+
+
+--
+.Usa la CLI
+--
+.Pasos
+. Crea el gancho de ejecución, sustituyendo los valores entre corchetes por información de tu entorno. Por ejemplo:
++
+[source, console]
+----
+tridentctl-protect create exechook <my_exec_hook_name> --action <action_type> --app <app_to_use_hook> --stage <pre_or_post_stage> --source-file <script-file> -n <application_namespace>
+----
+
+
+--
+====
+
+
+[[manually-run-an-execution-hook]]
+== Ejecuta manualmente un gancho de ejecución
+
+Puedes ejecutar manualmente un gancho de ejecución con fines de prueba o si necesitas volver a ejecutar el gancho manualmente después de un fallo. Necesitas tener permisos de Owner, Admin o Member para ejecutar manualmente ganchos de ejecución.
+
+Ejecutar manualmente un hook de ejecución consiste en dos pasos básicos:
+
+. Crea una copia de seguridad de recursos, que recoge los recursos y crea una copia de seguridad de ellos, determinando dónde se ejecutará el hook
+. Ejecuta el hook de ejecución contra la copia de seguridad
+
+
+.Paso 1: crea una copia de seguridad de los recursos
+[%collapsible]
+====
+[role="tabbed-block"]
+=====
+.Usa un CR
+--
+.Pasos
+. Crea el archivo de recurso personalizado (CR) y asígnale el nombre `trident-protect-resource-backup.yaml`.
+. Configura los siguientes atributos para que coincidan con tu entorno de Trident Protect y la configuración del clúster:
++
+** *metadata.name*: (_Required_) El nombre de este recurso personalizado; elige un nombre único y sensato para tu entorno.
+** *spec.applicationRef*: (_Required_) El nombre de Kubernetes de la aplicación para la que crear la copia de seguridad de recursos.
+** *spec.appVaultRef*: (_Required_) el nombre del AppVault donde se almacena el contenido de la copia de seguridad.
+** *spec.appArchivePath*: la ruta dentro de AppVault donde se almacena el contenido de la copia de seguridad. Puedes usar el siguiente comando para encontrar esta ruta:
++
+[source, console]
+----
+kubectl get backups <BACKUP_NAME> -n my-app-namespace -o jsonpath='{.status.appArchivePath}'
+----
++
+Ejemplo de YAML:
+
++
+[source, yaml]
+----
+---
+apiVersion: protect.trident.netapp.io/v1
+kind: ResourceBackup
+metadata:
+  name: example-resource-backup
+spec:
+  applicationRef: my-app-name
+  appVaultRef: my-appvault-name
+  appArchivePath: example-resource-backup
+----
+
+
+. Después de rellenar el archivo CR con los valores correctos, aplica el CR:
++
+[source, console]
+----
+kubectl apply -f trident-protect-resource-backup.yaml
+----
+
+
+--
+.Usa la CLI
+--
+.Pasos
+. Crea el backup, reemplazando los valores entre corchetes con información de tu entorno. Por ejemplo:
++
+[source, console]
+----
+tridentctl protect create resourcebackup <my_backup_name> --app <my_app_name> --appvault <my_appvault_name> -n <my_app_namespace> --app-archive-path <app_archive_path>
+----
+. Consulta el estado de la copia de seguridad. Puedes usar este comando de ejemplo repetidamente hasta que la operación termine:
++
+[source, console]
+----
+tridentctl protect get resourcebackup -n <my_app_namespace> <my_backup_name>
+----
+. Verifica que la copia de seguridad se realizó correctamente:
++
+[source, console]
+----
+kubectl describe resourcebackup <my_backup_name>
+----
+
+
+--
+=====
+====
+.Paso 2: ejecuta el gancho de ejecución
+[%collapsible]
+====
+[role="tabbed-block"]
+=====
+.Usa un CR
+--
+.Pasos
+. Crea el archivo de recurso personalizado (CR) y asígnale el nombre `trident-protect-hook-run.yaml`.
+. Configura los siguientes atributos para que coincidan con tu entorno de Trident Protect y la configuración del clúster:
++
+** *metadata.name*: (_Required_) El nombre de este recurso personalizado; elige un nombre único y sensato para tu entorno.
+** *spec.applicationRef*: (_Obligatorio_) asegúrate de que este valor coincide con el nombre de la aplicación del CR ResourceBackup que creaste en el paso 1.
+** *spec.appVaultRef*: (_Obligatorio_) Asegúrate de que este valor coincide con el appVaultRef del ResourceBackup CR que creaste en el paso 1.
+** *spec.appArchivePath*: asegúrate de que este valor coincide con el appArchivePath del CR ResourceBackup que creaste en el paso 1.
++
+[source, console]
+----
+kubectl get backups <BACKUP_NAME> -n my-app-namespace -o jsonpath='{.status.appArchivePath}'
+----
+** *spec.action*: (_Required_) Una cadena que indica qué acción realizará el gancho de ejecución, suponiendo que coincida cualquier filtro de gancho de ejecución especificado. Valores posibles:
++
+*** Snapshot
+*** Copia de seguridad
+*** Restaurar
+*** Conmutación por error
+
+
+** *spec.stage*: (_Required_) Una cadena que indica en qué etapa de la acción debe ejecutarse el gancho de ejecución. Esta ejecución de gancho no ejecutará ganchos en ninguna otra etapa. Valores posibles:
++
+*** Pre
+*** Publicar
++
+Ejemplo de YAML:
+
++
+[source, yaml]
+----
+---
+apiVersion: protect.trident.netapp.io/v1
+kind: ExecHooksRun
+metadata:
+  name: example-hook-run
+spec:
+  applicationRef: my-app-name
+  appVaultRef: my-appvault-name
+  appArchivePath: example-resource-backup
+  stage: Post
+  action: Failover
+----
+
+
+
+
+. Después de rellenar el archivo CR con los valores correctos, aplica el CR:
++
+[source, console]
+----
+kubectl apply -f trident-protect-hook-run.yaml
+----
+
+
+--
+.Usa la CLI
+--
+.Pasos
+. Crea la solicitud para ejecutar manualmente el gancho:
++
+[source, console]
+----
+tridentctl protect create exechooksrun <my_exec_hook_run_name> -n <my_app_namespace> --action snapshot --stage <pre_or_post> --app <my_app_name> --appvault <my_appvault_name> --path <my_backup_name>
+----
+. Comprueba el estado de la ejecución del hook de ejecución. Puedes ejecutar este comando repetidamente hasta que se complete la operación:
++
+[source, console]
+----
+tridentctl protect get exechooksrun -n <my_app_namespace> <my_exec_hook_run_name>
+----
+. Describe el objeto exechooksrun para ver los detalles finales y el estado:
++
+[source, console]
+----
+kubectl -n <my_app_namespace> describe exechooksrun <my_exec_hook_run_name>
+----
+
+
+--
+=====
+====

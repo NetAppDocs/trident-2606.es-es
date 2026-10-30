@@ -1,0 +1,90 @@
+= Anotaciones y etiquetas de namespace durante las operaciones de restauración y conmutación por error
+:allow-uri-read: 
+
+
+
+
+[[namespace-annotations-and-labels-during-restore-and-failover-operations]]
+== Anotaciones y etiquetas de namespace durante las operaciones de restauración y conmutación por error
+
+Durante las operaciones de restauración y conmutación por error, las etiquetas y anotaciones en el espacio de nombres de destino se hacen coincidir con las etiquetas y anotaciones en el espacio de nombres de origen. Las etiquetas o anotaciones del espacio de nombres de origen que no existen en el espacio de nombres de destino se añaden, y cualquier etiqueta o anotación que ya exista se sobrescribe para que coincida con el valor del espacio de nombres de origen. Las etiquetas o anotaciones que existen solo en el espacio de nombres de destino permanecen sin cambios.
+
+
+NOTE: Si usas Red Hat OpenShift, es importante que notes el papel fundamental de las anotaciones de espacios de nombres en entornos OpenShift. Las anotaciones de espacios de nombres aseguran que los pods restaurados sigan los permisos y configuraciones de seguridad apropiados definidos por las restricciones de contexto de seguridad (SCC) de OpenShift y puedan acceder a los volúmenes sin problemas de permisos. Para obtener más información, consulta link:https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/authentication_and_authorization/managing-pod-security-policies["OpenShift documentación de restricciones de contexto de seguridad"^].
+
+Puedes evitar que se sobrescriban anotaciones específicas en el espacio de nombres de destino configurando la variable de entorno de Kubernetes `RESTORE_SKIP_NAMESPACE_ANNOTATIONS` antes de realizar la restauración o la conmutación por error. Por ejemplo:
+
+[source, console]
+----
+helm upgrade trident-protect -n trident-protect netapp-trident-protect/trident-protect \
+  --set-string restoreSkipNamespaceAnnotations="{<annotation_key_to_skip_1>,<annotation_key_to_skip_2>}" \
+  --reuse-values
+----
+
+NOTE: Al realizar una operación de restauración o conmutación por error, las anotaciones y etiquetas de espacios de nombres especificadas en `restoreSkipNamespaceAnnotations` y `restoreSkipNamespaceLabels` quedan excluidas de la operación de restauración o conmutación por error. Asegúrate de que estos ajustes se configuren durante la instalación inicial de Helm. Para obtener más información, consulta link:../trident-protect/trident-protect-customize-installation.html#configure-additional-trident-protect-helm-chart-settings["Configura los ajustes adicionales del helm chart de Trident Protect"].
+
+Si instalaste la aplicación de origen usando Helm con la `--create-namespace` flag, se da un tratamiento especial a la clave de etiqueta `name`. Durante el proceso de restauración o conmutación por error, Trident Protect copia esta etiqueta al espacio de nombres de destino, pero actualiza el valor al valor del espacio de nombres de destino si el valor del origen coincide con el espacio de nombres de origen. Si este valor no coincide con el espacio de nombres de origen, se copia al espacio de nombres de destino sin cambios.
+
+
+
+[[example]]
+=== Ejemplo
+
+El siguiente ejemplo presenta un espacio de nombres de origen y uno de destino, cada uno con anotaciones y etiquetas diferentes. Puedes ver el estado del espacio de nombres de destino antes y después de la operación, y cómo se combinan o sobrescriben las anotaciones y etiquetas en el espacio de nombres de destino.
+
+
+
+==== Antes de la operación de restauración o conmutación por error
+
+La siguiente tabla ilustra el estado de los espacios de nombres de origen y destino de ejemplo antes de la operación de restauración o conmutación por error:
+
+[cols="1,2a,2a"]
+|===
+| Espacio de nombres | Anotaciones | Etiquetas 
+
+
+| Namespace ns-1 (fuente)  a| 
+* annotation.one/key: "valoractualizado"
+* annotation.two/key: "true"
+
+ a| 
+* entorno=producción
+* compliance=hipaa
+* name=ns-1
+
+
+
+
+| Namespace ns-2 (destino)  a| 
+* annotation.one/key: "true"
+* annotation.three/key: "false"
+
+ a| 
+* role=database
+
+
+|===
+
+
+==== Después de la operación de restauración
+
+La siguiente tabla ilustra el estado del espacio de nombres de destino de ejemplo después de la operación de restauración o conmutación por error. Se han añadido algunas claves, se han sobrescrito otras y la etiqueta `name` se ha actualizado para que coincida con el espacio de nombres de destino:
+
+[cols="1,2a,2a"]
+|===
+| Espacio de nombres | Anotaciones | Etiquetas 
+
+
+| Namespace ns-2 (destino)  a| 
+* annotation.one/key: "valoractualizado"
+* annotation.two/key: "true"
+* annotation.three/key: "false"
+
+ a| 
+* name=ns-2
+* compliance=hipaa
+* entorno=producción
+* role=database
+
+
+|===

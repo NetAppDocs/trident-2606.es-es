@@ -1,0 +1,93 @@
+---
+sidebar: sidebar 
+permalink: trident-get-started/architecture.html 
+keywords: trident backend, AFF, FAS, ONTAP Select, Cloud, Amazon FSx for NetApp ONTAP, drivers, ONTAP drivers 
+summary: Trident se ejecuta como un único Controller Pod más un Node Pod en cada nodo de trabajo del clúster. El pod de nodo debe estar ejecutándose en cualquier host donde quieras montar potencialmente un volumen Trident. 
+---
+= Arquitectura de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Trident se ejecuta como un único Controller Pod más un Node Pod en cada nodo de trabajo del clúster. El pod de nodo debe estar ejecutándose en cualquier host donde quieras montar potencialmente un volumen Trident.
+
+
+
+[[understanding-controller-pods-and-node-pods]]
+== Entender los pods de controlador y los pods de nodo
+
+Trident se despliega como un solo <<Pod de controlador Trident>> y uno o más <<Pods de nodo Trident>> en el clúster de Kubernetes y usa los _CSI Sidecar Containers_ estándar de Kubernetes para simplificar el despliegue de plugins CSI. link:https://kubernetes-csi.github.io/docs/sidecar-containers.html["Contenedores sidecar de Kubernetes CSI"^] son mantenidos por la comunidad de Kubernetes Storage.
+
+Kubernetes link:https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/["selectores de nodos"^] y link:https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/["tolerancias y taints"^] se usan para restringir que un pod se ejecute en un nodo específico o preferido. Puedes configurar selectores de nodo y tolerancias para pods de controlador y nodo durante la instalación de Trident.
+
+* El complemento del controlador se encarga del aprovisionamiento y la gestión de volúmenes, como las instantáneas y el cambio de tamaño.
+* El plugin de nodo se encarga de conectar el almacenamiento al nodo.
+
+
+.Trident desplegado en el clúster de Kubernetes
+image::../media/trident-arch.png[Diagrama de la arquitectura Trident en el clúster de Kubernetes.]
+
+
+
+[[trident-controller-pod]]
+=== Pod de controlador Trident
+
+El pod de controlador Trident es un único pod que ejecuta el complemento de controlador CSI.
+
+* Responsable de aprovisionar y gestionar volúmenes en almacenamiento NetApp
+* Gestionado por un despliegue de Kubernetes
+* Puede ejecutarse en el plano de control o en los nodos worker, dependiendo de los parámetros de instalación.
+
+
+.Diagrama del pod del controlador Trident
+image::../media/controller-pod.png[Diagrama del pod de controlador Trident ejecutando el plugin de controlador CSI con los sidecars CSI aplicables.]
+
+
+
+[[trident-node-pods]]
+=== Pods de nodo Trident
+
+Los pods de nodos Trident son pods privilegiados que ejecutan el plugin de nodos CSI.
+
+* Responsable de montar y desmontar almacenamiento para los Pods que se ejecutan en el host
+* Gestionado por un DaemonSet de Kubernetes
+* Debe ejecutarse en cualquier nodo que monte almacenamiento NetApp
+
+
+.Diagrama del pod del nodo Trident
+image::../media/node-pod.png[Diagrama del Trident Node Pod ejecutando el complemento CSI Node con el sidecar CSI aplicable.]
+
+
+
+[[supported-kubernetes-cluster-architectures]]
+== Arquitecturas de clúster de Kubernetes compatibles
+
+Trident es compatible con las siguientes arquitecturas de Kubernetes:
+
+[cols="3,1,2"]
+|===
+| Arquitecturas de clúster de Kubernetes | Compatible | Instalación predeterminada 
+
+
+| Maestro único, compute | Sí  a| 
+Sí
+
+
+
+| Múltiples maestros, compute | Sí  a| 
+Sí
+
+
+
+| Maestro,  `etcd`, computación | Sí  a| 
+Sí
+
+
+
+| Maestro, infraestructura, compute | Sí  a| 
+Sí
+
+|===

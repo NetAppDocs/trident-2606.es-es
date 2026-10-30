@@ -1,0 +1,31 @@
+---
+sidebar: sidebar 
+permalink: trident-concepts/vol-access-groups.html 
+keywords: volume access groups, element, solidfire, chap, Trident, hci, netapp hci, storage system, access volumes, 
+summary: Aprende más sobre cómo Trident usa los grupos de acceso a volúmenes. 
+---
+= Gestión de grupos de acceso a volúmenes de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Obtén más información sobre cómo Trident usa https://docs.netapp.com/us-en/element-software/concepts/concept_solidfire_concepts_volume_access_groups.html["grupos de acceso de volúmenes"^].
+
+
+NOTE: Ignora esta sección si usas CHAP, que se recomienda para simplificar la gestión y evitar el límite de escalado que se describe abajo. Además, si usas Trident en modo CSI, puedes ignorar esta sección. Trident usa CHAP cuando se instala como un aprovisionador CSI mejorado.
+
+
+
+[[learn-about-volume-access-groups]]
+== Conoce los grupos de acceso de volúmenes
+
+Trident puede utilizar grupos de acceso a volúmenes para controlar el acceso a los volúmenes que aprovisiona. Si CHAP está desactivado, espera encontrar un grupo de acceso llamado `trident` a menos que especifiques uno o más ID de grupo de acceso en la configuración.
+
+Aunque Trident asocia nuevos volúmenes con los grupos de acceso configurados, no crea ni gestiona los grupos de acceso en sí. Los grupos de acceso deben existir antes de que el backend de almacenamiento se agregue a Trident, y necesitan contener los IQN iSCSI de cada nodo en el clúster de Kubernetes que podría montar los volúmenes aprovisionados por ese backend. En la mayoría de las instalaciones, eso incluye cada nodo de trabajo en el clúster.
+
+Para clústeres de Kubernetes con más de 64 nodos, deberías usar varios grupos de acceso. Cada grupo de acceso puede contener hasta 64 IQN, y cada volumen puede pertenecer a cuatro grupos de acceso. Con el máximo de cuatro grupos de acceso configurados, cualquier nodo en un clúster de hasta 256 nodos podrá acceder a cualquier volumen. Para ver los límites más recientes de los grupos de acceso a volúmenes, consulta  https://docs.netapp.com/us-en/element-software/concepts/concept_solidfire_concepts_volume_access_groups.html["aquí"^].
+
+Si estás modificando la configuración de una que usa el grupo de acceso predeterminado `trident` a una que también usa otros, incluye el ID para el grupo de acceso `trident` en la lista.

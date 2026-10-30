@@ -1,0 +1,243 @@
+---
+sidebar: sidebar 
+permalink: trident-use/monitor-trident.html 
+keywords: telemetry, Trident, monitor, metrics, health, volume usage, autosupport 
+summary: Trident proporciona un conjunto de puntos finales de métricas de Prometheus que puedes usar para monitorear el rendimiento de Trident. 
+---
+= Supervisar las operaciones de almacenamiento de Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Trident proporciona un conjunto de puntos finales de métricas de Prometheus que puedes usar para monitorear el rendimiento de Trident.
+
+
+
+[[overview]]
+== Descripción general
+
+Las métricas proporcionadas por Trident te permiten hacer lo siguiente:
+
+* Monitorea el estado y la configuración de Trident. Puedes examinar qué tan exitosas son las operaciones y si puede comunicarse con los backends como se espera.
+* Examina la información de uso del backend y entiende cuántos volúmenes se aprovisionan en un backend y la cantidad de espacio consumido, y así sucesivamente.
+* Mantén un mapeo de la cantidad de volúmenes aprovisionados en los backends disponibles.
+* Monitorea el rendimiento. Puedes ver cuánto tarda Trident en comunicarse con los backends y realizar operaciones.
+
+
+
+NOTE: De forma predeterminada, las métricas de Trident se exponen en el puerto de destino `8001` en el endpoint `/metrics`. Estas métricas están *habilitadas por defecto* cuando instalas Trident. También puedes configurar el consumo de métricas de Trident a través de HTTPS en el puerto `8444`.
+
+.Lo que necesitas
+* Un clúster de Kubernetes con Trident instalado.
+* Una instancia de Prometheus. Esto puede ser un https://github.com/prometheus-operator/prometheus-operator["Implementación de Prometheus en contenedores"^] o puedes elegir ejecutar Prometheus como un https://prometheus.io/download/["aplicación nativa"^].
+
+
+
+
+[[step-1-define-a-prometheus-target]]
+== Paso 1: define un objetivo de Prometheus
+
+Deberías definir un objetivo de Prometheus para recopilar las métricas y obtener información sobre los backends que Trident administra, los volúmenes que crea y así sucesivamente. Consulta link:https://prometheus-operator.dev/docs/developer/getting-started/["Documentación de Prometheus Operator"^].
+
+
+
+[[step-2-create-a-prometheus-servicemonitor]]
+== Paso 2: Crea un ServiceMonitor de Prometheus
+
+Para consumir las métricas de Trident, debes crear un Prometheus ServiceMonitor que supervise el  `trident-csi` servicio y escuche en el  `metrics` puerto. Un ejemplo de ServiceMonitor se ve así:
+
+[source, yaml]
+----
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trident-sm
+  namespace: monitoring
+  labels:
+    release: prom-operator
+spec:
+  jobLabel: trident
+  selector:
+    matchLabels:
+      app: controller.csi.trident.netapp.io
+  namespaceSelector:
+    matchNames:
+      - trident
+  endpoints:
+    - port: metrics
+      interval: 15s
+----
+Esta definición de ServiceMonitor recupera las métricas devueltas por el  `trident-csi` servicio y busca específicamente el  `metrics` endpoint del servicio. Como resultado, Prometheus ahora está configurado para entender las métricas de Trident.
+
+Además de las métricas disponibles directamente desde Trident, kubelet expone muchas `kubelet_volume_*` métricas a través de su propio endpoint de métricas. Kubelet puede proporcionar información sobre los volúmenes que están conectados, los pods y otras operaciones internas que maneja. Consulta https://kubernetes.io/docs/concepts/cluster-administration/monitoring/["aquí"^].
+
+
+
+[[consume-trident-metrics-over-https]]
+=== Consume métricas de Trident a través de HTTPS
+
+Para consumir métricas de Trident a través de HTTPS (puerto 8444), debes modificar la definición de ServiceMonitor para incluir la configuración TLS. También necesitas copiar el  `trident-csi` secreto desde el  `trident` namespace al namespace donde se está ejecutando Prometheus. Puedes hacer esto usando el siguiente comando:
+
+`kubectl get secret trident-csi -n trident -o yaml | sed 's/namespace: trident/namespace: monitoring/' | kubectl apply -f -`
+
+Un ejemplo de ServiceMonitor para métricas HTTPS se ve así:
+
+[source, yaml]
+----
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trident-sm
+  namespace: monitoring
+  labels:
+    release: prom-operator
+spec:
+  jobLabel: trident
+  selector:
+    matchLabels:
+      app: controller.csi.trident.netapp.io
+  namespaceSelector:
+    matchNames:
+      - trident
+  endpoints:
+    - interval: 15s
+      path: /metrics
+      port: https-metrics
+      scheme: https
+      tlsConfig:
+        ca:
+          secret:
+            key: caCert
+            name: trident-csi
+        cert:
+          secret:
+            key: clientCert
+            name: trident-csi
+        keySecret:
+          key: clientKey
+          name: trident-csi
+        serverName: trident-csi
+----
+Trident admite métricas HTTPS en todos los métodos de instalación: tridentctl, Helm chart y Operator:
+
+* Si estás usando el  `tridentctl install` comando, puedes pasar la  `--https-metrics` bandera para habilitar las métricas HTTPS.
+* Si estás usando el gráfico Helm, puedes configurar el  `httpsMetrics` parámetro para habilitar las métricas HTTPS.
+* Si estás usando archivos YAML, puedes agregar la  `--https_metrics` bandera al  `trident-main` contenedor en el  `trident-deployment.yaml` archivo.
+
+
+
+
+[[step-3-query-trident-metrics-with-promql]]
+== Paso 3: Consultar métricas de Trident con PromQL
+
+PromQL es bueno para crear expresiones que devuelven series de tiempo o datos tabulares.
+
+Aquí hay algunas consultas PromQL que puedes usar:
+
+
+
+[[get-trident-health-information]]
+=== Obtén información de salud de Trident
+
+* **Porcentaje de respuestas HTTP 2XX de Trident**
+
+
+[listing]
+----
+(sum (trident_rest_ops_seconds_total_count{status_code=~"2.."} OR on() vector(0)) / sum (trident_rest_ops_seconds_total_count)) * 100
+----
+* **Porcentaje de respuestas REST de Trident mediante código de estado**
+
+
+[listing]
+----
+(sum (trident_rest_ops_seconds_total_count) by (status_code)  / scalar (sum (trident_rest_ops_seconds_total_count))) * 100
+----
+* **Duración media en ms de las operaciones realizadas por Trident**
+
+
+[listing]
+----
+sum by (operation) (trident_operation_duration_milliseconds_sum{success="true"}) / sum by (operation) (trident_operation_duration_milliseconds_count{success="true"})
+----
+
+
+[[get-trident-usage-information]]
+=== Obtén información sobre el uso de Trident
+
+* **Tamaño promedio del volumen**
+
+
+[listing]
+----
+trident_volume_allocated_bytes/trident_volume_count
+----
+* **Espacio total de volumen aprovisionado por cada backend**
+
+
+[listing]
+----
+sum (trident_volume_allocated_bytes) by (backend_uuid)
+----
+
+
+[[get-individual-volume-usage]]
+=== Obtén el uso del volumen individual
+
+
+NOTE: Esto solo está habilitado si también se recopilan métricas de kubelet.
+
+* **Porcentaje de espacio utilizado para cada volumen**
+
+
+[listing]
+----
+kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100
+----
+
+
+[[learn-about-trident-autosupport-telemetry]]
+== Conoce la telemetría de Trident AutoSupport
+
+De forma predeterminada, Trident envía métricas de Prometheus e información básica del backend a NetApp cada día.
+
+* Para evitar que Trident envíe métricas de Prometheus e información básica del backend a NetApp, pasa la  `--silence-autosupport` bandera durante la instalación de Trident.
+* Trident también puede enviar registros de contenedores a NetApp Support bajo demanda mediante  `tridentctl send autosupport`. Necesitarás activar Trident para que suba sus registros. Antes de enviar los registros, deberías aceptar la NetApp https://www.netapp.com/company/legal/privacy-policy/["política de privacidad"^].
+* A menos que se especifique, Trident recupera los registros de las últimas 24 horas.
+* Puedes especificar el periodo de retención de registros con la  `--since` bandera. Por ejemplo: `tridentctl send autosupport --since=1h`. Esta información se recopila y se envía mediante un  `trident-autosupport` contenedor que se instala junto con Trident. Puedes obtener la imagen del contenedor en  https://hub.docker.com/r/netapp/trident-autosupport["Trident AutoSupport"^].
+* Trident AutoSupport no recopila ni transmite información personal identificable (PII) ni información personal. Viene con una  https://www.netapp.com/pdf.html?item=/media/14114-enduserlicenseagreementworldwide.pdf["CLUF"^] que no aplica a la propia imagen del contenedor de Trident. Puedes aprender más sobre el compromiso de NetApp con la seguridad y la confianza de los datos https://www.netapp.com/pdf.html?item=/media/14114-enduserlicenseagreementworldwide.pdf["aquí"^].
+
+
+Un ejemplo de carga útil enviada por Trident se ve así:
+
+[source, yaml]
+----
+---
+items:
+  - backendUUID: ff3852e1-18a5-4df4-b2d3-f59f829627ed
+    protocol: file
+    config:
+      version: 1
+      storageDriverName: ontap-nas
+      debug: false
+      debugTraceFlags: null
+      disableDelete: false
+      serialNumbers:
+        - nwkvzfanek_SN
+      limitVolumeSize: ""
+    state: online
+    online: true
+----
+* Los mensajes de AutoSupport se envían al endpoint de AutoSupport de NetApp. Si estás usando un registro privado para almacenar imágenes de contenedor, puedes usar la bandera `--image-registry`.
+* También puedes configurar las URL de proxy generando los archivos YAML de instalación. Esto se puede hacer usando  `tridentctl install --generate-custom-yaml` para crear los archivos YAML y añadiendo el argumento  `--proxy-url` para el contenedor  `trident-autosupport` en  `trident-deployment.yaml`.
+
+
+
+
+[[disable-trident-metrics]]
+== Desactivar métricas de Trident
+
+Para **deshabilitar** que se informen las métricas, debes generar YAML personalizados (usando la  `--generate-custom-yaml` bandera) y editarlos para quitar la  `--metrics` bandera de ser invocada para el contenedor  `trident-main`.

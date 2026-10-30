@@ -1,0 +1,107 @@
+---
+sidebar: sidebar 
+permalink: trident-protect/trident-protect-generate-support-bundle.html 
+keywords: trident, protect, bundle, support, netapp, custom, resource, file 
+summary: 'Trident Protect permite a los administradores generar paquetes que incluyen información útil para NetApp Support, incluyendo registros, métricas e información de topología sobre los clústeres y las apps bajo gestión. Si estás conectado a Internet, puedes subir paquetes de soporte al NetApp Support Site (NSS) usando un archivo custom resource (CR).' 
+---
+= Genera un paquete de soporte Trident Protect
+:hardbreaks:
+:allow-uri-read: 
+:nofooter: 
+:icons: font
+:linkattrs: 
+:imagesdir: ../media/
+
+
+[role="lead"]
+Trident Protect permite a los administradores generar paquetes que incluyen información útil para NetApp Support, incluyendo registros, métricas e información de topología sobre los clústeres y las apps bajo gestión. Si estás conectado a internet, puedes subir paquetes de soporte al NetApp Support Site (NSS) usando un archivo custom resource (CR).
+
+[role="tabbed-block"]
+====
+.Crea un paquete de soporte usando un CR
+--
+.Pasos
+. Crea el archivo de recurso personalizado (CR) y ponle un nombre (por ejemplo, `trident-protect-support-bundle.yaml`).
+. Configura los siguientes atributos:
++
+** *metadata.name*: (_Required_) El nombre de este recurso personalizado; elige un nombre único y sensato para tu entorno.
+** *spec.triggerType*: (_Obligatorio_) determina si el paquete de soporte se genera de inmediato o se programa. La generación programada del paquete ocurre a las 12AM UTC. Valores posibles:
++
+*** Programado
+*** Manual
+
+
+** *spec.uploadEnabled*: (_Opcional_) Controla si el paquete de soporte debe cargarse en el NetApp Support Site después de generarse. Si no se especifica, el valor predeterminado es `false`. Valores posibles:
++
+*** verdadero
+*** false (predeterminado)
+
+
+** *spec.dataWindowStart*: (_Opcional_) Una cadena de fecha en formato RFC 3339 que especifica la fecha y hora en que debe comenzar la ventana de datos incluidos en el soporte bundle. Si no se especifica, el valor predeterminado es hace 24 horas. La fecha de ventana más temprana que puedes especificar es hace 7 días.
++
+Ejemplo de YAML:
+
++
+[source, yaml]
+----
+---
+apiVersion: protect.trident.netapp.io/v1
+kind: AutoSupportBundle
+metadata:
+  name: trident-protect-support-bundle
+spec:
+  triggerType: Manual
+  uploadEnabled: true
+  dataWindowStart: 2024-05-05T12:30:00Z
+----
+
+
+. Después de que completes el archivo  `trident-protect-support-bundle.yaml` con los valores correctos, aplica el CR:
++
+[source, console]
+----
+kubectl apply -f trident-protect-support-bundle.yaml -n trident-protect
+----
+
+
+--
+.Crea un paquete de soporte usando la CLI
+--
+.Pasos
+. Crea el paquete de soporte, reemplazando los valores entre corchetes por información de tu entorno. El `trigger-type` determina si el paquete se crea inmediatamente o si la hora de creación la dicta la programación, y puede ser `Manual` o `Scheduled`. La configuración predeterminada es `Manual`.
++
+Por ejemplo:
+
++
+[source, console]
+----
+tridentctl-protect create autosupportbundle <my-bundle-name> --trigger-type <trigger-type> -n trident-protect
+----
+
+
+--
+====
+
+
+[[monitor-and-retrieve-the-support-bundle]]
+== Supervisa y recupera el paquete de soporte
+
+Después de crear un paquete de soporte usando cualquiera de los dos métodos, puedes supervisar el progreso de su generación y recuperarlo en tu sistema local.
+
+.Pasos
+. Espera a que `status.generationState` llegue al estado `Completed`. Puedes monitorear el progreso de la generación con el siguiente comando:
++
+[source, console]
+----
+kubectl get autosupportbundle trident-protect-support-bundle -n trident-protect
+----
+. Recupera el paquete de soporte en tu sistema local. Obtén el comando de copia del paquete completo AutoSupport:
++
+[source, console]
+----
+kubectl describe autosupportbundle trident-protect-support-bundle -n trident-protect
+----
++
+Busca el comando `kubectl cp` en la salida y ejecútalo, reemplazando el argumento de destino por tu directorio local preferido.
+
+

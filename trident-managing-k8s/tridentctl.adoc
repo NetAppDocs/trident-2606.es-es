@@ -1,0 +1,329 @@
+---
+sidebar: sidebar 
+permalink: trident-managing-k8s/tridentctl.html 
+keywords: tridentctl, trident, kubernetes, commands, options, usage, flags 
+summary: Conoce más sobre tridentctl, una utilidad de línea de comandos que te da acceso sencillo a Trident. 
+---
+= Administra Trident usando tridentctl
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+El https://github.com/NetApp/trident/releases["Paquete de instalación de Trident"^] incluye la `tridentctl` utilidad de línea de comandos para proporcionar un acceso sencillo a Trident. Los usuarios de Kubernetes con privilegios suficientes pueden usarla para instalar Trident o gestionar el namespace que contiene el pod de Trident.
+
+
+
+[[commands-and-global-flags]]
+== Comandos y banderas globales
+
+Puedes ejecutar `tridentctl help` para obtener una lista de comandos disponibles para `tridentctl` o añadir la bandera `--help` a cualquier comando para ver una lista de opciones y banderas para ese comando específico.
+
+`tridentctl [command] [--optional-flag]`
+
+La utilidad Trident `tridentctl` admite los siguientes comandos y banderas globales.
+
+.Comandos
+[%collapsible]
+====
+`create`:: Agrega un recurso a Trident.
+`delete`:: Elimina uno o varios recursos de Trident.
+`get`:: Obtén uno o más recursos de Trident.
+`help`:: Ayuda sobre cualquier comando.
+`images`:: Imprime una tabla de las imágenes de contenedores que necesita Trident.
+`import`:: Importa un recurso existente a Trident.
+`install`:: Instala Trident.
+`logs`:: Imprime los registros de Trident.
+`send`:: Envía un recurso desde Trident.
+`uninstall`:: Desinstala Trident.
+`update`:: Modifica un recurso en Trident.
+`update backend state`:: Suspende temporalmente las operaciones de backend.
+`upgrade`:: Actualiza un recurso en Trident.
+`version`:: Imprime la versión de Trident.
+
+
+====
+.Banderas globales
+[%collapsible]
+====
+`-d`, `--debug`:: Salida de depuración.
+`-h`, `--help`:: Ayuda para `tridentctl`.
+`-k`, `--kubeconfig string`:: Especifica la  `KUBECONFIG` ruta para ejecutar comandos localmente o de un clúster de Kubernetes a otro.
++
+--
+
+NOTE: Como alternativa, puedes exportar la  `KUBECONFIG` variable para que apunte a un clúster de Kubernetes específico y emitir  `tridentctl` comandos a ese clúster.
+
+--
+`-n`, `--namespace string`:: Espacio de nombres de la implementación de Trident.
+`-o`, `--output string`:: Formato de salida. Uno de json|yaml|name|wide|ps (predeterminado).
+`-s`, `--server string`:: Dirección/puerto de la interfaz de REST de Trident.
++
+--
+
+WARNING: La interfaz REST de Trident se puede configurar para escuchar y servir en 127.0.0.1 (para IPv4) o [::1] (para IPv6) solamente.
+
+--
+
+
+====
+
+
+[[command-options-and-flags]]
+== Opciones de comando y flags
+
+
+
+[[create]]
+=== crear
+
+Usa el  `create` comando para agregar un recurso a Trident.
+
+`tridentctl create [option]`
+
+Opciones:: `backend`: agrega un backend a Trident.
+
+
+
+
+[[delete]]
+=== borrar
+
+Usa el comando  `delete` para eliminar uno o más recursos de Trident.
+
+`tridentctl delete [option]`
+
+Opciones:: `backend`: eliminar uno o más backends de almacenamiento de Trident.
+`snapshot`: eliminar una o más instantáneas de volumen de Trident.
+`storageclass`: eliminar una o más clases de almacenamiento de Trident.
+`volume`: eliminar uno o más volúmenes de almacenamiento de Trident.
+
+
+
+
+[[get]]
+=== obtener
+
+Usa el  `get` comando para obtener uno o más recursos de Trident.
+
+`tridentctl get [option]`
+
+Opciones:: `backend`: Obtén uno o más backends de almacenamiento de Trident.
+`snapshot`: Obtén una o más instantáneas de Trident.
+`storageclass`: Obtén una o más clases de almacenamiento de Trident.
+`volume`: Obtén uno o más volúmenes de Trident.
+Banderas:: `-h`, `--help`: Ayuda para volúmenes.
+`--parentOfSubordinate string`: Limitar consulta a volumen de origen subordinado.
+`--subordinateOf string`: Limitar consulta a subordinados de volumen.
+
+
+
+
+[[images]]
+=== imágenes
+
+Usa  `images`banderas para imprimir una tabla de las imágenes de contenedores que necesita Trident.
+
+`tridentctl images [flags]`
+
+Banderas:: `-h`, `--help`: ayuda para imágenes.
+`-v`, `--k8s-version string`: versión semántica del clúster de Kubernetes.
+
+
+
+
+[[import-volume]]
+=== importar volumen
+
+Usa el  `import volume` comando para importar un volumen existente a Trident.
+
+`tridentctl import volume <backendName> <volumeName> [flags]`
+
+Alias:: `volume`, `v`
+Banderas:: `-f`, `--filename string`: ruta al archivo YAML o JSON PVC.
+`-h`, `--help`: ayuda para el volumen.
+`--no-manage`: crear solo PV/PVC. No asumas la gestión del ciclo de vida del volumen.
+
+
+
+
+[[install]]
+=== instalar
+
+Usa las  `install` banderas para instalar Trident.
+
+`tridentctl install [flags]`
+
+Banderas:: `--autosupport-image string`: La imagen del contenedor para Autosupport Telemetry (predeterminado "netapp/trident autosupport:<current-version>").
+`--autosupport-proxy string`: La dirección/puerto de un proxy para enviar Autosupport Telemetry.
+`--enable-node-prep`: Intentar instalar los paquetes requeridos en los nodos.
+`--generate-custom-yaml`: Generar archivos YAML sin instalar nada.
+`-h`, `--help`: Ayuda para instalar.
+`--http-request-timeout`: Anular el tiempo de espera de la solicitud HTTP para la API de REST del controlador Trident (predeterminado 1m30s).
+`--image-registry string`: La dirección/puerto de un registro interno de imágenes.
+`--k8s-timeout duration`: El tiempo de espera para todas las operaciones de Kubernetes (predeterminado 3m0s).
+`--kubelet-dir string`: La ubicación en el host del estado interno de kubelet (predeterminado "/var/lib/kubelet").
+`--log-format string`: El formato de registro de Trident (text, json) (predeterminado "text").
+`--node-prep`: Permite que Trident prepare los nodos del clúster de Kubernetes para gestionar volúmenes usando el protocolo de almacenamiento de datos especificado. *Actualmente, `iscsi` es el único valor admitido. Beginning with OpenShift 4.19, la versión mínima de Trident compatible con esta función es 25.06.1.*
+`--pv string`: El nombre del PV heredado que usa Trident, asegúrate de que no exista (predeterminado "trident").
+`--pvc string`: El nombre del PVC heredado que usa Trident, asegúrate de que no exista (predeterminado "trident").
+`--silence-autosupport`: No enviar paquetes de autosupport a NetApp automáticamente (predeterminado true).
+`--silent`: Deshabilitar la mayoría de la salida durante la instalación.
+`--trident-image string`: La imagen de Trident que se va a instalar.
+`--k8s-api-qps`: El límite de consultas por segundo (QPS) para las solicitudes de la API de Kubernetes (predeterminado 100; opcional).
+`--use-custom-yaml`: Usar cualquier archivo YAML existente que haya en el directorio de setup.
+`--use-ipv6`: Usar IPv6 para la comunicación de Trident.
+
+
+
+
+[[logs]]
+=== registros
+
+Usa  `logs`banderas para imprimir los registros de Trident.
+
+`tridentctl logs [flags]`
+
+Banderas:: `-a`, `--archive`: Crea un archivo de soporte con todos los registros a menos que se especifique lo contrario.
+`-h`, `--help`: Ayuda para registros.
+`-l`, `--log string`: Registro de Trident para mostrar. Uno de trident|auto|trident-operator|all (predeterminado "auto").
+`--node string`: El nombre de nodo de Kubernetes del que se recopilarán los registros del pod del nodo.
+`-p`, `--previous`: Obtén los registros de la instancia anterior del contenedor si existe.
+`--sidecars`: Obtén los registros de los contenedores sidecar.
+
+
+
+
+[[send]]
+=== enviar
+
+Usa el  `send` comando para enviar un recurso desde Trident.
+
+`tridentctl send [option]`
+
+Opciones:: `autosupport`: Envía un archivo de Autosupport a NetApp.
+
+
+
+
+[[uninstall]]
+=== desinstalar
+
+Usa  `uninstall` flags para desinstalar Trident.
+
+`tridentctl uninstall [flags]`
+
+Banderas:: `-h, --help`: ayuda para la desinstalación.
+`--silent`: deshabilitar la mayoría de las salidas durante la desinstalación.
+
+
+
+
+[[update]]
+=== actualizar
+
+Usa el  `update` comando para modificar un recurso en Trident.
+
+`tridentctl update [option]`
+
+Opciones:: `backend`: actualiza un backend en Trident.
+
+
+
+
+[[update-backend-state]]
+=== actualiza el estado del backend
+
+Usa el  `update backend state` comando para suspender o reanudar las operaciones del backend.
+
+`tridentctl update backend state <backend-name> [flag]`
+
+.Puntos a considerar
+* Si se crea un backend utilizando un TridentBackendConfig (tbc), el backend no se puede actualizar usando un archivo  `backend.json`.
+* Si el  `userState` se ha establecido en un tbc, no se puede modificar usando el comando  `tridentctl update backend state <backend-name> --user-state suspended/normal`.
+* Para recuperar la capacidad de configurar el  `userState` mediante tridentctl después de que se haya configurado mediante tbc, el campo  `userState` debe eliminarse de tbc. Esto se puede hacer usando el comando  `kubectl edit tbc`. Después de eliminar el campo  `userState`, puedes usar el comando  `tridentctl update backend state` para cambiar el  `userState` de un backend.
+* Usa el  `tridentctl update backend state` para cambiar el  `userState`. También puedes actualizar el  `userState` usando  `TridentBackendConfig` o  `backend.json` archivo; esto activa una reinicialización completa del backend y puede llevar mucho tiempo.
++
+Banderas:: `-h`, `--help`: Ayuda para el estado del backend.
+`--user-state`: Configura en `suspended` para pausar las operaciones del backend. Configura en `normal` para reanudar las operaciones del backend. Cuando se configura en `suspended`:
+
+
+* `AddVolume` y  `Import Volume` están en pausa.
+* `CloneVolume`, `ResizeVolume`, `PublishVolume`, `UnPublishVolume`, `CreateSnapshot`, `GetSnapshot`, `RestoreSnapshot`, `DeleteSnapshot`, `RemoveVolume`, `GetVolumeExternal`, `ReconcileNodeAccess` siguen estando disponibles.
+
+
+También puedes actualizar el estado del backend usando  `userState` el campo en el archivo de configuración del backend  `TridentBackendConfig` o  `backend.json`. Para más información, consulta link:../trident-use/backend_options.html["Opciones para gestionar backends"] y link:../trident-use/backend_ops_kubectl.html["Realiza la gestión del backend con kubectl"].
+
+*Ejemplo:*
+
+[role="tabbed-block"]
+====
+.JSON
+--
+Sigue estos pasos para actualizar el  `userState` usando el  `backend.json` archivo:
+
+. Edita el  `backend.json` archivo para incluir el  `userState` campo con su valor establecido en 'suspended'.
+. Actualiza el backend usando el  `tridentctl update backend` comando y la ruta al archivo  `backend.json` actualizado.
++
+*Ejemplo*: `tridentctl update backend  -f /<path to backend JSON file>/backend.json -n trident`
+
+
+
+[listing]
+----
+{
+  "version": 1,
+  "storageDriverName": "ontap-nas",
+  "managementLIF": "<redacted>",
+  "svm": "nas-svm",
+  "backendName": "customBackend",
+  "username": "<redacted>",
+  "password": "<redacted>",
+  "userState": "suspended"
+}
+
+----
+--
+.YAML
+--
+Puedes editar el tbc después de aplicarlo usando el  `kubectl edit <tbc-name> -n <namespace>` comando. El siguiente ejemplo actualiza el estado del backend a suspendido usando la opción  `userState: suspended`:
+
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-ontap-nas
+spec:
+  version: 1
+  backendName: customBackend
+  storageDriverName: ontap-nas
+  managementLIF: <redacted>
+  svm: nas-svm
+  userState: suspended
+  credentials:
+    name: backend-tbc-ontap-nas-secret
+----
+--
+====
+
+
+[[version]]
+=== versión
+
+Usa  `version` banderas para imprimir la versión de  `tridentctl` y el servicio Trident en ejecución.
+
+`tridentctl version [flags]`
+
+Banderas:: `--client`: Solo versión de cliente (no requiere servidor).
+`-h, --help`: Ayuda para la versión.
+
+
+
+
+[[plugin-support]]
+== Compatibilidad con complementos
+
+Tridentctl admite plugins similares a kubectl. Tridentctl detecta un plugin si el nombre del archivo binario del plugin sigue el esquema "tridentctl-<plugin>" y el binario está ubicado en una carpeta listada en la variable de entorno PATH. Todos los plugins detectados se muestran en la sección de plugins de la ayuda de tridentctl. Opcionalmente, también puedes limitar la búsqueda especificando una carpeta de plugins en la variable de entorno TRIDENTCTL_PLUGIN_PATH (ejemplo: `TRIDENTCTL_PLUGIN_PATH=~/tridentctl-plugins/`). Si se usa la variable, tridentctl busca solo en la carpeta especificada.

@@ -1,0 +1,291 @@
+---
+sidebar: sidebar 
+permalink: trident-use/trident-fsx-storage-backend.html 
+keywords: Amazon FSx for NetApp ONTAP, FSx for ONTAP, deploy Trident, integrate Trident, Trident 
+summary: 'Al usar Trident con Amazon FSx for NetApp ONTAP, puedes asegurarte de que tus clústeres de Kubernetes que se ejecutan en Amazon Elastic Kubernetes Service (EKS) puedan aprovisionar volúmenes persistentes de bloques y archivos respaldados por ONTAP.' 
+---
+= Configura el backend de almacenamiento
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+
+
+[[overview]]
+== Descripción general
+
+Antes de que puedas aprovisionar volúmenes usando Trident, necesitas integrar tu backend de almacenamiento con Trident creando una Trident Backend Configuration (TBC). La TBC define cómo Trident se conecta al backend de almacenamiento y proporciona la información necesaria para que Trident gestione los recursos de almacenamiento.
+
+
+
+[[create-a-trident-backend-configuration-tbc-for-fsx-for-ontap]]
+== Crear una configuración de Trident Backend (TBC) para FSx for ONTAP
+
+Hay dos formas de configurar el backend de Trident para que utilice un sistema de archivos FSx para ONTAP: * Crea un StorageClass que aproveche la función de backend automático. * Crea el backend y StorageClass por separado.
+
+Los pasos de esta sección cubren cómo crear el backend por separado. Para obtener información sobre cómo utilizar la función Backend automático, consulta la sección link:trident-fsx-storageclass-pvc.html#configure-a-storage-class-without-automatic-backend-configuration["Configura StorageClass y PVC"] para más información.
+
+Para crear un backend de almacenamiento, necesitas crear un archivo de configuración en formato JSON o YAML. El archivo debe especificar el tipo de almacenamiento que quieres (NAS o SAN), el sistema de archivos, la SVM de la que lo vas a obtener y cómo autenticarte con ella. El siguiente ejemplo muestra cómo definir almacenamiento basado en NAS y usar un secreto de AWS para guardar las credenciales de la SVM que quieres usar:
+
+[role="tabbed-block"]
+====
+.YAML
+--
+[source, YAML]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-ontap-nas
+  namespace: trident
+spec:
+  version: 1
+  storageDriverName: ontap-nas
+  backendName: tbc-ontap-nas
+  svm: svm-name
+  aws:
+    fsxFilesystemID: fs-xxxxxxxxxx
+  credentials:
+    name: "arn:aws:secretsmanager:us-west-2:xxxxxxxx:secret:secret-name"
+    type: awsarn
+----
+--
+.JSON
+--
+[source, JSON]
+----
+{
+  "apiVersion": "trident.netapp.io/v1",
+  "kind": "TridentBackendConfig",
+  "metadata": {
+    "name": "backend-tbc-ontap-nas"
+    "namespace": "trident"
+  },
+  "spec": {
+    "version": 1,
+    "storageDriverName": "ontap-nas",
+    "backendName": "tbc-ontap-nas",
+    "svm": "svm-name",
+    "aws": {
+      "fsxFilesystemID": "fs-xxxxxxxxxx"
+    },
+    "managementLIF": null,
+    "credentials": {
+      "name": "arn:aws:secretsmanager:us-west-2:xxxxxxxx:secret:secret-name",
+      "type": "awsarn"
+    }
+  }
+}
+
+----
+--
+====
+Ejecuta los siguientes comandos para crear y validar la configuración de backend de Trident (TBC):
+
+* Crea la configuración del backend de Trident (TBC) desde el archivo yaml y ejecuta el siguiente comando:
++
+[source, console]
+----
+kubectl create -f backendconfig.yaml -n trident
+----
++
+[listing]
+----
+tridentbackendconfig.trident.netapp.io/backend-tbc-ontap-nas created
+----
+* Valida que la configuración de backend de Trident (TBC) se creó correctamente:
++
+[source, console]
+----
+Kubectl get tbc -n trident
+----
++
+[listing]
+----
+NAME                         BACKEND NAME         BACKEND UUID                           PHASE   STATUS
+
+backend-tbc-ontap-nas        tbc-ontap-nas        933e0071-66ce-4324-b9ff-f96d916ac5e9   Bound   Success
+----
+
+
+
+
+[[fsx-for-ontap-driver-details]]
+== Detalles del controlador de FSx for ONTAP
+
+Puedes integrar Trident con Amazon FSx for NetApp ONTAP usando los siguientes controladores:
+
+* `ontap-san`: Cada PV aprovisionado es un LUN dentro de su propio volumen de Amazon FSx for NetApp ONTAP. Recomendado para almacenamiento en bloque.
+* `ontap-nas`: Cada PV aprovisionado es un volumen completo de Amazon FSx for NetApp ONTAP. Recomendado para NFS y SMB.
+* `ontap-san-economy`: cada PV aprovisionado es un LUN con una cantidad configurable de LUN por volumen de Amazon FSx for NetApp ONTAP.
+* `ontap-nas-economy`: Cada PV aprovisionado es un qtree, con una cantidad configurable de qtrees por volumen de Amazon FSx para NetApp ONTAP.
+* `ontap-nas-flexgroup`: cada PV aprovisionado es un volumen completo de Amazon FSx for NetApp ONTAP FlexGroup.
+
+
+Para obtener detalles del controlador, consulta link:../trident-use/ontap-nas.html["Controladores NAS"] y link:../trident-use/ontap-san.html["Controladores SAN"].
+
+Una vez creado el archivo de configuración, ejecuta este comando para crearlo dentro de tu EKS:
+
+[source, console]
+----
+kubectl create -f configuration_file
+----
+Para verificar el estado, ejecuta este comando:
+
+[source, console]
+----
+kubectl get tbc -n trident
+----
+[listing]
+----
+NAME                    BACKEND NAME            BACKEND UUID                           PHASE   STATUS
+backend-fsx-ontap-nas   backend-fsx-ontap-nas   7a551921-997c-4c37-a1d1-f2f4c87fa629   Bound   Success
+----
+
+
+[[backend-advanced-configuration-and-examples]]
+== Configuración avanzada de backend y ejemplos
+
+Consulta la siguiente tabla para ver las opciones de configuración del backend:
+
+[cols="3"]
+|===
+| Parámetro | Descripción | Ejemplo 
+
+
+| `version` |  | Siempre 1 
+
+
+| `storageDriverName` | Nombre del controlador de almacenamiento. No se puede modificar después de la creación. Para actualizar este parámetro, debes crear un nuevo backend. | `ontap-nas`, `ontap-nas-economy`, `ontap-nas-flexgroup`, `ontap-san`, `ontap-san-economy` 
+
+
+| `backendName` | Nombre personalizado o el backend de almacenamiento | Nombre del driver + "_" + dataLIF 
+
+
+| `managementLIF` | Dirección IP de un clúster o de una LIF de administración de SVM. Se puede especificar un nombre de dominio completo (FQDN). Se puede configurar para usar direcciones IPv6 si Trident se instaló usando el flag de IPv6. Las direcciones IPv6 deben definirse entre corchetes, como [28e8:d9fb:a825:b7bf:69a8:d02f:9e7b:3555]. Si proporcionas el  `fsxFilesystemID` bajo el campo  `aws`, no necesitas proporcionar el  `managementLIF` porque Trident obtiene la información de SVM  `managementLIF` desde AWS. Así que debes proporcionar credenciales para un usuario bajo la SVM (por ejemplo: vsadmin) y el usuario debe tener el rol  `vsadmin`. | "10.0.0.1", "[2001:1234:abcd::fefe]" 
+
+
+| `dataLIF` | Dirección IP del LIF de protocolo. *Controladores NAS de ONTAP*: NetApp recomienda especificar dataLIF. Si no se proporciona, Trident obtiene los dataLIF del SVM. Puedes especificar un nombre de dominio completo (FQDN) para las operaciones de montaje NFS, lo que te permite crear un DNS de round-robin para balancear la carga entre varios dataLIF. Se puede cambiar después de la configuración inicial. Consulta https://kb.netapp.com/Cloud/Astra/Trident/Is_it_possible_to_update_the_DataLIF_on_the_trident_backend["Actualizar dataLIF tras la configuración inicial"^]. *Controladores SAN de ONTAP*: No lo especifiques para iSCSI. Trident usa ONTAP Selective LUN Map para descubrir los LIF de iSCSI necesarios para establecer una sesión multipath. Se genera una advertencia si dataLIF se define explícitamente. Se puede configurar para usar direcciones IPv6 si Trident se instaló usando el flag de IPv6. Las direcciones IPv6 deben definirse entre corchetes, como [28e8:d9fb:a825:b7bf:69a8:d02f:9e7b:3555]. |  
+
+
+| `autoExportPolicy` | Habilita la creación y actualización automática de políticas de exportación [Boolean]. Usando las opciones  `autoExportPolicy` y  `autoExportCIDRs`, Trident puede gestionar las políticas de exportación automáticamente. | `false` 
+
+
+| `autoExportCIDRs` | Lista de CIDR para filtrar las direcciones IP de los nodos de Kubernetes cuando  `autoExportPolicy` está habilitado. Usando las opciones  `autoExportPolicy` y  `autoExportCIDRs`, Trident puede gestionar las políticas de exportación automáticamente. | "["0.0.0.0/0", "::/0"]" 
+
+
+| `labels` | Conjunto de etiquetas arbitrarias con formato JSON para aplicar en volúmenes | "" 
+
+
+| `clientCertificate` | Valor codificado en Base64 del certificado del cliente. Usado para auth basada en certificados | "" 
+
+
+| `clientPrivateKey` | Valor codificado en Base64 de la clave privada del cliente. Usado para auth basada en certificados | "" 
+
+
+| `trustedCACertificate` | Valor codificado en Base64 del certificado de CA de confianza. Opcional. Se usa para la autenticación basada en certificados. | "" 
+
+
+| `username` | Nombre de usuario para conectarte al clúster o SVM. Se utiliza para la autenticación basada en credenciales. Por ejemplo, vsadmin. |  
+
+
+| `password` | Contraseña para conectarse al clúster o SVM. Se utiliza para la autenticación basada en credenciales. |  
+
+
+| `svm` | Máquina virtual de almacenamiento que vas a usar | Derivado si se especifica un LIF de gestión de SVM. 
+
+
+| `storagePrefix` | Prefijo que se utiliza al aprovisionar nuevos volúmenes en el SVM. No se puede modificar después de la creación. Para actualizar este parámetro, tendrás que crear un nuevo backend. | `trident` NOTA: Los parámetros de configuración del backend que afectan a la identidad del backend y a la nomenclatura de los volúmenes, como `storageDriverName` y `storagePrefix`, no se pueden modificar después de la creación. Para actualizarlos, debes crear un nuevo backend. 
+
+
+| `limitAggregateUsage` | *No especifiques para Amazon FSx for NetApp ONTAP.* Los  `fsxadmin` y  `vsadmin` no tienen los permisos necesarios para recuperar el uso agregado y limitarlo usando Trident. | No uses. 
+
+
+| `limitVolumeSize` | Falla el aprovisionamiento si el tamaño del volumen solicitado supera este valor. También restringe el tamaño máximo de los volúmenes que administra para qtrees y LUNs, y la  `qtreesPerFlexvol` opción permite personalizar el número máximo de qtrees por FlexVol volume | "" (no aplicado por defecto) 
+
+
+| `lunsPerFlexvol` | LUNs máximos por FlexVol volume, deben estar en el rango [50, 200]. Solo para SAN. | "`100`" 
+
+
+| `debugTraceFlags` | Indicadores de depuración para utilizar cuando estés solucionando problemas. Por ejemplo, {"api":false, "method":true} no uses  `debugTraceFlags` a menos que estés resolviendo problemas y necesites un volcado de registro detallado. | null 
+
+
+| `nfsMountOptions` | Lista separada por comas de opciones de montaje NFS. Las opciones de montaje para volúmenes persistentes de Kubernetes normalmente se especifican en las clases de almacenamiento, pero si no se especifican opciones de montaje en una clase de almacenamiento, Trident usará las opciones de montaje especificadas en el archivo de configuración del backend de almacenamiento. Si no se especifican opciones de montaje en la clase de almacenamiento ni en el archivo de configuración, Trident no establecerá ninguna opción de montaje en un volumen persistente asociado. | "" 
+
+
+| `nasType` | Configura la creación de volúmenes NFS o SMB. Las opciones son  `nfs`,  `smb` o null. *Debes establecerlo en  `smb` para volúmenes SMB.* Si lo configuras en null, se usarán volúmenes NFS por defecto. | `nfs` 
+
+
+| `qtreesPerFlexvol` | Máximo de qtrees por FlexVol volume, debe estar en el rango [50, 300] | `"200"` 
+
+
+| `smbShare` | Puedes especificar uno de los siguientes: el nombre de un recurso compartido SMB creado usando Microsoft Management Console o ONTAP CLI, o un nombre para permitir que Trident cree el recurso compartido SMB. Este parámetro es obligatorio para los backends de Amazon FSx for ONTAP. | `smb-share` 
+
+
+| `useREST` | Parámetro booleano para usar las ONTAP REST APIs. Cuando se establece en  `true`, Trident usará las ONTAP REST APIs para comunicarse con el backend. Esta función requiere ONTAP 9.11.1 y versiones posteriores. Además, el rol de inicio de sesión de ONTAP utilizado debe tener acceso a la aplicación  `ontap`. Esto se cumple con los roles predefinidos  `vsadmin` y  `cluster-admin`. | `false` 
+
+
+| `aws` | Puedes especificar lo siguiente en el archivo de configuración para AWS FSx for ONTAP: - `fsxFilesystemID`: especifica el ID del sistema de archivos de AWS FSx. - `apiRegion`: nombre de la región de la API de AWS. - `apikey`: clave de API de AWS. - `secretKey`: clave secreta de AWS. | ``
+`` 
+`""`
+`""`
+`""` 
+
+
+| `credentials` | Especifica las credenciales de FSx SVM que se van a guardar en AWS Secrets Manager. - `name`: Amazon Resource Name (ARN) del secreto, que contiene las credenciales de SVM. - `type`: Establécelo en  `awsarn`. Consulta link:https://docs.aws.amazon.com/secretsmanager/latest/userguide/create_secret.html["Crea un secreto de AWS Secrets Manager"^] para obtener más información. |  
+|===
+
+
+[[backend-configuration-options-for-provisioning-volumes]]
+== Opciones de configuración de backend para aprovisionar volúmenes
+
+Puedes controlar el aprovisionamiento predeterminado usando estas opciones en la  `defaults` sección de la configuración. Por ejemplo, mira los ejemplos de configuración abajo.
+
+[cols="3"]
+|===
+| Parámetro | Descripción | Predeterminado 
+
+
+| `spaceAllocation` | Asignación de espacio para LUNs | `true` 
+
+
+| `spaceReserve` | Modo de reserva de espacio; "ninguno" (fino) o "volumen" (grueso) | `none` 
+
+
+| `snapshotPolicy` | Política de SnapVault a utilizar | `none` 
+
+
+| `qosPolicy` | Grupo de políticas de QoS para asignar a los volúmenes creados. Elige una de qosPolicy o adaptiveQosPolicy por pool de almacenamiento o backend. Usar grupos de políticas de QoS con Trident requiere ONTAP 9.8 o una versión posterior. Deberías usar un grupo de políticas de QoS no compartido y asegurarte de que el grupo de políticas se aplique a cada componente individualmente. Un grupo de políticas de QoS compartido impone el límite máximo para el rendimiento total de todas las cargas de trabajo. | "" 
+
+
+| `adaptiveQosPolicy` | Grupo de políticas de QoS adaptativo para asignar a los volúmenes creados. Elige una de qosPolicy o adaptiveQosPolicy por pool de almacenamiento o backend. No compatible con ontap-nas-economy. | "" 
+
+
+| `snapshotReserve` | Porcentaje de volumen reservado para snapshots "0" | Si `snapshotPolicy` es `none`, `else` " 
+
+
+| `splitOnClone` | Divide un clon de su padre al momento de su creación | `false` 
+
+
+| `encryption` | Activa NetApp Volume Encryption (NVE) en el nuevo volumen; el valor predeterminado es  `false`. NVE debe estar licenciado y habilitado en el clúster para usar esta opción. Si NAE está habilitado en el backend, cualquier volumen aprovisionado en Trident tendrá NAE habilitado. Para más información, consulta: link:../trident-reco/security-reco.html["Cómo funciona Trident con NVE y NAE"]. | `false` 
+
+
+| `luksEncryption` | Activa el cifrado LUKS. Consulta link:../trident-reco/security-luks.html["Usa Linux Unified Key Setup (LUKS)"]. Solo para SAN. | "" 
+
+
+| `tieringPolicy` | Política de tiering a usar	`none` |  
+
+
+| `unixPermissions` | Modo para nuevos volúmenes. *Dejar vacío para volúmenes SMB.* | "" 
+
+
+| `securityStyle` | Estilo de seguridad para nuevos volúmenes. NFS admite  `mixed` y  `unix` estilos de seguridad. SMB admite  `mixed` y  `ntfs` estilos de seguridad. | NFS predeterminado es `unix`. SMB predeterminado es `ntfs`. 
+|===
+
+
+[[provision-smb-volumes]]
+== Aprovisionar volúmenes SMB
+
+Puedes aprovisionar volúmenes SMB usando el controlador `ontap-nas`. Antes de completar link:trident-fsx-storage-backend.html#fsx-for-ontap-driver-details["Integración de controladores SAN y NAS de ONTAP"] completa estos pasos: link:worker-node-prep.html#prepare-to-provision-smb-volumes["Prepárate para aprovisionar volúmenes SMB"].

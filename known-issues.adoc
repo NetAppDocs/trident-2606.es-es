@@ -1,0 +1,40 @@
+---
+sidebar: sidebar 
+permalink: known-issues.html 
+keywords: 'what"s new, new features, enhancements, known issues, resolved issues, troubleshooting' 
+summary: Estos son los problemas conocidos de esta versión. 
+---
+= Problemas conocidos
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ./media/
+
+
+[role="lead"]
+Los problemas conocidos identifican problemas que podrían impedirte usar correctamente esta versión del producto.
+
+Los siguientes problemas conocidos afectan la versión actual:
+
+
+
+[[volumesnapshots-not-reaching-readytouse-state]]
+== VolumeSnapshots no alcanza el estado ReadyToUse
+
+[WARNING]
+====
+Existe un problema conocido con el `csi-snapshotter` sidecar. En todas las versiones de Kubernetes, VolumeGroupSnapshots `v1beta1` impide que VolumeSnapshots llegue al estado `ReadyToUse`.
+
+====
+Hay dos soluciones alternativas:
+
+. Elimina los CRD de VolumeGroupSnapshots para desactivar VolumeGroupSnapshots y luego vuelve a instalar Trident.
+. Instala VolumeGroupSnapshots `v1beta2` y `snapshot-controller` versión 8.4.0 o posterior, y luego vuelve a instalar Trident. VolumeGroupSnapshots no funcionan en versiones de Kubernetes anteriores a v1.34.
+
+
+
+
+[[restoring-restic-backups-of-large-files-can-fail]]
+== Restaurar backups de Restic de archivos grandes puede fallar
+
+Al restaurar archivos de 30GB o más desde una copia de seguridad de Amazon S3 hecha con Restic, la operación de restauración puede fallar. Como solución alternativa, haz una copia de seguridad de los datos usando Kopia como data mover (Kopia es el data mover predeterminado para las copias de seguridad). Consulta https://docs.netapp.com/us-en/trident/trident-protect/trident-protect-protect-apps.html["Protege las aplicaciones usando Trident Protect"^] para obtener instrucciones.
